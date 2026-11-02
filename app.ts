@@ -4,10 +4,18 @@ import { createClient } from '@supabase/supabase-js';
 const app = express();
 app.use(express.json());
 
+function cleanSupabaseUrl(url: string | undefined | null): string {
+  if (!url) return '';
+  let cleaned = String(url).trim().replace(/\/+$/, '');
+  cleaned = cleaned.replace(/\/(rest|auth)(\/v1)?$/i, '');
+  cleaned = cleaned.replace(/\/+$/, '');
+  return cleaned;
+}
+
 const rawSupabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const rawSupabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
-const supabaseUrl = rawSupabaseUrl ? String(rawSupabaseUrl).trim().replace(/\/+$/, '') : '';
+const supabaseUrl = cleanSupabaseUrl(rawSupabaseUrl);
 const supabaseAnonKey = rawSupabaseAnonKey ? String(rawSupabaseAnonKey).trim() : '';
 
 const supabaseAdmin = createClient(supabaseUrl || 'https://placeholder.supabase.co', supabaseAnonKey || 'placeholder-key');
