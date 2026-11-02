@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Business, RequestItem } from '../types';
-import { getAppData, saveAppData } from '../storage';
+import { createRequestInDb } from '../storage';
 
 interface RequestsTabProps {
   business: Business;
@@ -53,7 +53,6 @@ export const RequestsTab: React.FC<RequestsTabProps> = ({
       return;
     }
 
-    // Validate phone: must start with +41 and have 9 digits (total 11 digits when stripped)
     const cleanPhone = phone.replace(/\s+/g, '');
     const phoneRegex = /^\+41\d{9}$/;
     if (!phoneRegex.test(cleanPhone)) {
@@ -68,7 +67,6 @@ export const RequestsTab: React.FC<RequestsTabProps> = ({
 
     setIsSending(true);
     try {
-      const data = getAppData();
       const finalSmsText = smsTemplate.replaceAll('{nome}', clientName).replaceAll('{link}', editableUrl);
       const nowStr = new Date().toLocaleString('it-CH');
       const nowIso = new Date().toISOString();
@@ -85,8 +83,7 @@ export const RequestsTab: React.FC<RequestsTabProps> = ({
         consentAt: nowIso
       };
 
-      const updatedRequests = [newReq, ...data.requests];
-      saveAppData({ ...data, requests: updatedRequests });
+      await createRequestInDb(newReq);
       
       setClientName('');
       setPhone('+41 ');

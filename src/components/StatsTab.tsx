@@ -9,6 +9,7 @@ import {
   CartesianGrid 
 } from 'recharts';
 import { Business, Review, InsightsData } from '../types';
+import { supabase } from '../lib/supabase';
 
 interface StatsTabProps {
   business: Business;
@@ -47,7 +48,7 @@ export const StatsTab: React.FC<StatsTabProps> = ({ business, reviews }) => {
   const publishedCount = reviews.filter(r => r.status === 'pubblicata').length;
   const publishedPct = totalReviews > 0 ? Math.round((publishedCount / totalReviews) * 100) : 0;
 
-  // Tempo medio di risposta calcolato dai giorni tra date e replyDate ("n/d" se mancano dati)
+  // Tempo medio di risposta calcolato dai giorni dinamicamente
   let avgResponseTime = 'n/d';
   const repliedWithDates = reviews.filter(r => r.date && r.replyDate);
   if (repliedWithDates.length > 0) {
@@ -67,7 +68,6 @@ export const StatsTab: React.FC<StatsTabProps> = ({ business, reviews }) => {
     }
   }
 
-  // Grafico con il conteggio reale delle recensioni per mese negli ultimi 6 mesi, senza valori inventati
   const getTrendData = () => {
     const now = new Date();
     const months: { key: string; label: string; count: number; starsSum: number }[] = [];
@@ -83,7 +83,6 @@ export const StatsTab: React.FC<StatsTabProps> = ({ business, reviews }) => {
 
     reviews.forEach(r => {
       if (!r.date) return;
-      // r.date expected YYYY-MM-DD
       const rKey = r.date.substring(0, 7);
       const found = months.find(m => m.key === rKey);
       if (found) {
@@ -105,9 +104,15 @@ export const StatsTab: React.FC<StatsTabProps> = ({ business, reviews }) => {
     setLoadingInsights(true);
     setInsightsError(null);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
       const res = await fetch('/api/insights', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ business, reviews }),
       });
       if (!res.ok) {

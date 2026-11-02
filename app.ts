@@ -1,28 +1,33 @@
 import express from 'express';
+import { createClient } from '@supabase/supabase-js';
 
 const app = express();
 app.use(express.json());
 
-// Simple in-memory IP rate limiter (e.g. 20 requests per minute per IP)
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+const supabaseAdmin = createClient(supabaseUrl || 'https://placeholder.supabase.co', supabaseAnonKey || 'placeholder-key');
+
+// User-based rate limiter (20 requests per minute per user ID)
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 function rateLimiter(req: express.Request, res: express.Response, next: express.NextFunction) {
-  const rawIp = req.headers['x-forwarded-for'];
-  const ip = (typeof rawIp === 'string' ? rawIp.split(',')[0].trim() : req.socket.remoteAddress) || 'unknown';
+  const user = (req as any).user;
+  const userId = user?.id || 'anonymous';
   const now = Date.now();
   const windowMs = 60 * 1000; // 1 minute
   const maxRequests = 20;
 
-  // Clean expired entries
   for (const [key, val] of rateLimitMap.entries()) {
     if (now > val.resetTime) {
       rateLimitMap.delete(key);
     }
   }
 
-  let record = rateLimitMap.get(ip);
+  let record = rateLimitMap.get(userId);
   if (!record || now > record.resetTime) {
     record = { count: 1, resetTime: now + windowMs };
-    rateLimitMap.set(ip, record);
+    rateLimitMap.set(userId, record);
   } else {
     record.count++;
     if (record.count > maxRequests) {
@@ -30,6 +35,25 @@ function rateLimiter(req: express.Request, res: express.Response, next: express.
     }
   }
   next();
+}
+
+// Auth verification middleware
+async function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Accesso richiesto' });
+  }
+  const token = authHeader.split(' ')[1];
+  try {
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !user) {
+      return res.status(401).json({ error: 'Accesso richiesto' });
+    }
+    (req as any).user = user;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Accesso richiesto' });
+  }
 }
 
 // Timeout helper for OpenRouter calls (25 seconds)
@@ -51,7 +75,7 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs = 25000): Promise<T
   }
 }
 
-// Health check endpoint
+// Health check endpoint (public)
 app.get('/api/health', (req, res) => {
   const openRouterConfigured = !!process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.trim() !== '';
   res.json({
@@ -60,8 +84,8 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// OpenRouter draft reply endpoint
-app.post('/api/draft-reply', rateLimiter, async (req, res) => {
+// OpenRouter draft reply endpoint (protected)
+app.post('/api/draft-reply', requireAuth, rateLimiter, async (req, res) => {
   try {
     if (!process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY.trim() === '') {
       return res.status(500).json({ error: 'Chiave OpenRouter non configurata sul server' });
@@ -69,7 +93,6 @@ app.post('/api/draft-reply', rateLimiter, async (req, res) => {
 
     const { reviewText, author, stars, businessSettings } = req.body;
 
-    // Validation
     if (reviewText !== undefined && reviewText !== null) {
       if (typeof reviewText !== 'string' || reviewText.length > 2000) {
         return res.status(400).json({ error: 'Testo della recensione non valido (stringa max 2000 caratteri)' });
@@ -123,22 +146,22 @@ app.post('/api/draft-reply', rateLimiter, async (req, res) => {
       defaultLanguage === 'de' ? 'Scrivi rigorosamente in lingua tedesca.' :
       defaultLanguage === 'en' ? 'Scrivi rigorosamente in lingua inglese.' :
       defaultLanguage === 'it' ? 'Scrivi rigorosamente in lingua italiana.' :
-      'Rispondi nella stessa lingua in cui è scritta la recensione (auto). Se la recensione è in tedesco rispondi in tedesco, se in inglese in inglese, altrimenti in italiano.';
+      'Rispondi nella stessa lingua in cui è scritta la recensione (auto).';
 
     const systemPrompt = `Sei l'assistente virtuale di "${name || 'Attività'}" (${category || ''}, a ${location || ''}).
 Devi scrivere una bozza di risposta professionale per una recensione Google lasciata da ${author || 'Cliente'} (${stars || 5} stelle).
 
 Regole tassative:
 1. ${langInstruction}
-2. Tono: ${tone || 'caloroso'} (caloroso / formale / diretto).
+2. Tono: ${tone || 'caloroso'}.
 3. Massimo 70 parole.
-4. Cita un dettaglio concreto della recensione (se presente, altrimenti fai riferimento all'esperienza generale).
+4. Cita un dettaglio concreto della recensione.
 5. Non inventare fatti o servizi non menzionati.
 6. Non promettere rimborsi, sconti o omaggi.
 7. Firma tassativamente con il nome: "${signerName || 'Staff'}".
-8. ${(stars || 5) <= 2 ? 'ATTENZIONE: Questa è una recensione negativa. Ringrazia per il feedback, mostra empatia, non cercare scuse e non accusare il cliente, e invita gentilmente a contattare l\'attività su un canale privato (' + (privateContact || 'contatto privato') + ').' : 'Ringrazia calorosamente il cliente.'}
+8. ${(stars || 5) <= 2 ? 'ATTENZIONE: Questa è una recensione negativa. Ringrazia per il feedback, mostra empatia, non cercare scuse e invita gentilmente a contattare l\'attività su un canale privato (' + (privateContact || 'contatto privato') + ').' : 'Ringrazia calorosamente il cliente.'}
 9. Evita frasi come: "${phrasesToAvoid || ''}".
-10. Restituisci SOLO il testo della risposta pronto per essere pubblicato, senza virgolette iniziali o finali e senza commenti extra.`;
+10. Restituisci SOLO il testo della risposta pronto per essere pubblicato, senza virgolette e senza commenti extra.`;
 
     const userContent = `<recensione>\nAutore: ${author || 'Cliente'}\nStelle: ${stars || 5}\nTesto: ${reviewText || '(Nessun testo, solo votazione a stelle)'}\n</recensione>`;
 
@@ -178,8 +201,8 @@ Regole tassative:
   }
 });
 
-// OpenRouter insights endpoint
-app.post('/api/insights', rateLimiter, async (req, res) => {
+// OpenRouter insights endpoint (protected)
+app.post('/api/insights', requireAuth, rateLimiter, async (req, res) => {
   try {
     if (!process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY.trim() === '') {
       return res.status(500).json({ error: 'Chiave OpenRouter non configurata sul server' });
@@ -190,7 +213,6 @@ app.post('/api/insights', rateLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Dati business o recensioni non validi' });
     }
 
-    // Massimo 30 recensioni, testi troncati a 400 caratteri
     const slicedReviews = reviews.slice(0, 30);
     const reviewsSummary = slicedReviews.map((r: any) => {
       const txt = typeof r.text === 'string' ? r.text.substring(0, 400) : '';
@@ -245,7 +267,6 @@ Scrivi in italiano chiaro e sintetico.`;
       insights = {};
     }
 
-    // Valida che la risposta abbia strengths e improvements (altrimenti liste vuote)
     const strengths = Array.isArray(insights.strengths) ? insights.strengths : [];
     const improvements = Array.isArray(insights.improvements) ? insights.improvements : [];
 
@@ -256,7 +277,6 @@ Scrivi in italiano chiaro e sintetico.`;
   }
 });
 
-// 404 for any other /api/* route
 app.use('/api/*', (req, res) => {
   res.status(404).json({ error: 'Endpoint non trovato' });
 });

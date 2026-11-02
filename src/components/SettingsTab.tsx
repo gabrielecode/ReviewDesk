@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Business } from '../types';
+import { supabase } from '../lib/supabase';
+import { AlertTriangle } from 'lucide-react';
 
 interface SettingsTabProps {
   business: Business;
@@ -12,6 +14,11 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ business, onUpdateBusi
   const [previewDraft, setPreviewDraft] = useState<string | null>(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+
+  // Delete account state
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     setFormData(business);
@@ -36,9 +43,15 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ business, onUpdateBusi
     setPreviewDraft(null);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
       const res = await fetch('/api/draft-reply', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           reviewText: 'Ottimo servizio e ambiente fantastico! Complimenti a tutto lo staff.',
           author: 'Mario Rossi',
@@ -59,6 +72,27 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ business, onUpdateBusi
       setPreviewError(err.message || 'Impossibile generare l\'anteprima.');
     } finally {
       setIsPreviewing(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== 'ELIMINA') return;
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    try {
+      const { error } = await supabase.rpc('delete_my_account');
+      if (error) throw error;
+      await supabase.auth.signOut();
+      window.location.reload();
+    } catch (err: any) {
+      console.error(err);
+      // Even if rpc fails or if already handled, try sign out
+      try {
+        await supabase.auth.signOut();
+      } catch {}
+      setDeleteError(err.message || 'Errore durante l\'eliminazione dell\'account.');
+      setIsDeleting(false);
     }
   };
 
@@ -192,7 +226,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ business, onUpdateBusi
           </div>
 
           <p className="text-xs text-[#667069]">
-            Genera una risposta di prova a una recensione fittizia da 5 stelle usando i valori attuali del modulo (anche non salvati).
+            Genera una risposta di prova a una recensione fittizia da 5 stelle usando i valori attuali del modulo.
           </p>
 
           {previewError && (
@@ -221,6 +255,40 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ business, onUpdateBusi
           </button>
         </div>
       </form>
+
+      {/* Section 4: Elimina account */}
+      <div className="panel-card p-5 space-y-4 border border-[#B3382C]/30 bg-[#B3382C]/5">
+        <div className="flex items-center gap-2 text-[#B3382C]">
+          <AlertTriangle className="w-4 h-4" />
+          <h3 className="font-semibold text-xs uppercase tracking-wide">Zona pericolosa: Elimina account</h3>
+        </div>
+
+        <p className="text-xs text-[#667069] leading-relaxed">
+          L'eliminazione dell'account rimuoverà permanentemente tutte le attività, le recensioni e i dati associati. Questa azione è irreversibile. Digita <strong className="text-[#1C2321]">ELIMINA</strong> per confermare.
+        </p>
+
+        {deleteError && (
+          <p className="text-xs text-[#B3382C]">{deleteError}</p>
+        )}
+
+        <div className="space-y-3">
+          <input
+            type="text"
+            value={deleteConfirmText}
+            onChange={(e) => setDeleteConfirmText(e.target.value)}
+            placeholder="Digita ELIMINA"
+            className="input-field w-full text-xs"
+          />
+          <button
+            type="button"
+            onClick={handleDeleteAccount}
+            disabled={deleteConfirmText !== 'ELIMINA' || isDeleting}
+            className="bg-[#B3382C] text-white px-4 py-2 rounded-[6px] text-xs font-medium hover:bg-[#9a2e23] transition disabled:opacity-50"
+          >
+            {isDeleting ? 'Eliminazione in corso...' : 'Elimina definitivamente il mio account'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

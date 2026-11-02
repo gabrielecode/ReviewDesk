@@ -6,7 +6,8 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import { Review, Business } from '../types';
-import { getAppData, saveAppData } from '../storage';
+import { updateReviewInDb } from '../storage';
+import { supabase } from '../lib/supabase';
 
 interface ReviewsTabProps {
   business: Business;
@@ -69,12 +70,14 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
     }
   }, [selectedReviewId]);
 
-  const handleTextChange = (val: string) => {
+  const handleTextChange = async (val: string) => {
     setDraftReplyText(val);
     if (selectedReviewId) {
-      const appData = getAppData();
-      const updatedReviews: Review[] = appData.reviews.map(r => r.id === selectedReviewId ? { ...r, draftText: val } : r);
-      saveAppData({ ...appData, reviews: updatedReviews });
+      try {
+        await updateReviewInDb(selectedReviewId, { draftText: val });
+      } catch (err) {
+        console.error(err);
+      }
     }
   };
 
@@ -87,9 +90,15 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
     setGenerationError(null);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
       const res = await fetch('/api/draft-reply', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           reviewId: target.id,
           reviewText: target.text,
@@ -106,21 +115,10 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
       const data = await res.json();
       const newDraft = data.draft;
 
-      const appData = getAppData();
-      const updatedReviews: Review[] = appData.reviews.map(r => {
-        if (r.id === target.id) {
-          return { 
-            ...r, 
-            draftText: newDraft, 
-            status: (r.status === 'pubblicata' ? 'pubblicata' : 'bozza_pronta') as Review['status']
-          };
-        }
-        return r;
-      });
-      saveAppData({ ...appData, reviews: updatedReviews });
+      const newStatus = target.status === 'pubblicata' ? 'pubblicata' : 'bozza_pronta';
+      await updateReviewInDb(target.id, { draftText: newDraft, status: newStatus });
       onRefreshReviews();
 
-      // If user is still viewing this review, update textarea
       if (selectedReviewId === target.id) {
         setDraftReplyText(newDraft);
       }
@@ -144,15 +142,12 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
     setIsSaving(true);
     try {
       const today = new Date().toISOString().split('T')[0];
-      const appData = getAppData();
-      const updatedReviews: Review[] = appData.reviews.map(r => r.id === selectedReview.id ? { 
-        ...r, 
-        replyText: draftReplyText, 
+      await updateReviewInDb(selectedReview.id, {
+        replyText: draftReplyText,
         draftText: undefined,
-        status: 'pubblicata' as const,
+        status: 'pubblicata',
         replyDate: today
-      } : r);
-      saveAppData({ ...appData, reviews: updatedReviews });
+      });
       onRefreshReviews();
     } catch (err) {
       alert('Errore durante la pubblicazione.');
@@ -165,29 +160,16 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
     if (!selectedReview) return;
     setIsSaving(true);
     try {
-      const appData = getAppData();
       const isPublished = selectedReview.status === 'pubblicata' || !!selectedReview.replyText;
 
-      const updatedReviews: Review[] = appData.reviews.map(r => {
-        if (r.id === selectedReview.id) {
-          if (isPublished) {
-            return { ...r, draftText: undefined, status: r.status };
-          } else {
-            return { ...r, draftText: undefined, replyText: undefined, replyDate: undefined, status: 'da_rispondere' as const };
-          }
-        }
-        return r;
-      });
-
-      saveAppData({ ...appData, reviews: updatedReviews });
       if (isPublished) {
+        await updateReviewInDb(selectedReview.id, { draftText: undefined });
         setDraftReplyText(selectedReview.replyText || '');
       } else {
+        await updateReviewInDb(selectedReview.id, { draftText: undefined, replyText: undefined, replyDate: undefined, status: 'da_rispondere' });
         setDraftReplyText('');
       }
       onRefreshReviews();
-    } catch (err) {
-      alert('Errore durante l\'operazione.');
     } finally {
       setIsSaving(false);
     }

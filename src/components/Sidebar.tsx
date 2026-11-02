@@ -6,7 +6,9 @@ import {
   Settings, 
   ChevronDown,
   RotateCcw,
-  Globe
+  Globe,
+  Plus,
+  LogOut
 } from 'lucide-react';
 import { Business } from '../types';
 
@@ -18,6 +20,9 @@ interface SidebarProps {
   setActiveTab: (tab: string) => void;
   onResetData: () => void;
   onOpenConnectionModal: () => void;
+  userEmail?: string;
+  onSignOut: () => void;
+  onAddBusiness: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -28,6 +33,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setActiveTab,
   onResetData,
   onOpenConnectionModal,
+  userEmail,
+  onSignOut,
+  onAddBusiness,
 }) => {
   const [dropdownOpen, setDropdownOpen] = React.useState(false);
 
@@ -71,7 +79,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   {currentBusiness?.name || 'Seleziona attività'}
                 </p>
                 <p className="text-[11px] text-[#667069] truncate">
-                  {currentBusiness?.location}
+                  {currentBusiness?.location || 'Nessuna località'}
                 </p>
               </div>
               <ChevronDown className={`w-3.5 h-3.5 text-[#667069] transition-transform shrink-0 ${dropdownOpen ? 'rotate-180' : ''}`} />
@@ -90,12 +98,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       b.id === currentBusiness?.id ? 'text-[#1F5F4A] font-medium bg-[#E8F0EC]/50' : 'text-[#1C2321]'
                     }`}
                   >
-                    <div>
-                      <p className="font-medium">{b.name}</p>
-                      <p className="text-[11px] text-[#667069]">{b.location}</p>
+                    <div className="truncate">
+                      <p className="font-medium truncate">{b.name}</p>
+                      <p className="text-[11px] text-[#667069] truncate">{b.location}</p>
                     </div>
                   </button>
                 ))}
+                <button
+                  onClick={() => {
+                    setDropdownOpen(false);
+                    onAddBusiness();
+                  }}
+                  className="w-full text-left px-3 py-2.5 hover:bg-[#F6F7F5] transition flex items-center gap-1.5 text-xs text-[#1F5F4A] font-medium border-t border-[#E5E7E3]"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Aggiungi attività
+                </button>
               </div>
             )}
           </div>
@@ -139,8 +156,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           })}
         </nav>
 
-        {/* Footer actions */}
+        {/* Footer actions & User info */}
         <div className="p-3 border-t border-[#E5E7E3] space-y-2">
+          {userEmail && (
+            <div className="px-2 py-1 text-[11px] text-[#667069] truncate" title={userEmail}>
+              <span className="font-medium text-[#1C2321] block truncate">{userEmail}</span>
+            </div>
+          )}
           <button
             onClick={onResetData}
             className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-[6px] hover:bg-[#F6F7F5] text-[#667069] hover:text-[#1C2321] text-[11px] transition"
@@ -148,9 +170,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <RotateCcw className="w-3 h-3" />
             Ripristina demo
           </button>
-          <div className="text-[10px] text-[#667069] text-center">
-            Google Business Profile
-          </div>
+          <button
+            onClick={onSignOut}
+            className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-[6px] hover:bg-[#B3382C]/10 text-[#B3382C] text-[11px] font-medium transition"
+          >
+            <LogOut className="w-3 h-3" />
+            Esci
+          </button>
         </div>
       </aside>
 
@@ -161,17 +187,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => setActiveTab('landing')}
             className="font-semibold text-sm text-[#1F5F4A] flex items-center gap-1 hover:underline"
           >
-            ← Home ReviewDesk
+            ← Home
           </button>
-          <select
-            value={currentBusiness?.id}
-            onChange={(e) => onSelectBusiness(e.target.value)}
-            className="input-field text-xs py-1 px-2"
-          >
-            {businesses.map((b) => (
-              <option key={b.id} value={b.id}>{b.name} ({b.location})</option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2">
+            <select
+              value={currentBusiness?.id || ''}
+              onChange={(e) => {
+                if (e.target.value === 'add-new') {
+                  onAddBusiness();
+                } else {
+                  onSelectBusiness(e.target.value);
+                }
+              }}
+              className="input-field text-xs py-1 px-2"
+            >
+              {businesses.map((b) => (
+                <option key={b.id} value={b.id}>{b.name} ({b.location})</option>
+              ))}
+              <option value="add-new">+ Aggiungi attività</option>
+            </select>
+            <button
+              onClick={onSignOut}
+              className="text-xs text-[#B3382C] font-medium p-1"
+              title="Esci"
+            >
+              Esci
+            </button>
+          </div>
         </header>
 
         <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-[#E5E7E3] z-40 flex items-center justify-around py-2 px-2">
