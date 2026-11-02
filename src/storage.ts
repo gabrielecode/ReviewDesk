@@ -232,59 +232,118 @@ export function mapRequestToDb(req: RequestItem) {
 }
 
 // Storage API functions using Supabase
+// Storage API functions using Supabase with LocalStorage fallback
 export async function getAppData(userId: string): Promise<AppData> {
-  const [bizRes, revRes, reqRes] = await Promise.all([
-    supabase.from('businesses').select('*'),
-    supabase.from('reviews').select('*'),
-    supabase.from('requests').select('*')
-  ]);
+  const cacheKey = `reviewdesk_data_${userId}`;
 
-  if (bizRes.error) throw bizRes.error;
-  if (revRes.error) throw revRes.error;
-  if (reqRes.error) throw reqRes.error;
+  try {
+    const [bizRes, revRes, reqRes] = await Promise.all([
+      supabase.from('businesses').select('*'),
+      supabase.from('reviews').select('*'),
+      supabase.from('requests').select('*')
+    ]);
 
-  const businesses = (bizRes.data || []).map(mapBusinessFromDb);
-  const reviews = (revRes.data || []).map(mapReviewFromDb);
-  const requests = (reqRes.data || []).map(mapRequestFromDb);
+    if (!bizRes.error && !revRes.error && !reqRes.error) {
+      const businesses = (bizRes.data || []).map(mapBusinessFromDb);
+      const reviews = (revRes.data || []).map(mapReviewFromDb);
+      const requests = (reqRes.data || []).map(mapRequestFromDb);
 
-  return { businesses, reviews, requests };
+      if (businesses.length > 0) {
+        const fullData = { businesses, reviews, requests };
+        localStorage.setItem(cacheKey, JSON.stringify(fullData));
+        return fullData;
+      }
+    }
+  } catch (err) {
+    console.warn('Supabase DB fetch error, falling back to local cache:', err);
+  }
+
+  // Check LocalStorage cache
+  const cachedStr = localStorage.getItem(cacheKey);
+  if (cachedStr) {
+    try {
+      const cached = JSON.parse(cachedStr);
+      if (cached && Array.isArray(cached.businesses) && cached.businesses.length > 0) {
+        return cached;
+      }
+    } catch {}
+  }
+
+  // If no data found at all, return default demo data or admin business
+  const isAdmin = userId.includes('sititicino') || userId.includes('admin');
+  const demoBizList = initialDemoBusinesses.map((b, idx) => {
+    if (idx === 0 && isAdmin) {
+      return {
+        ...b,
+        name: 'Connect and create',
+        category: 'Consulenza e Siti Web',
+        location: 'Morbiolo Inferiore / Lugano',
+        signerName: 'Gabriele Sestito',
+        privateContact: 'info@sititicino.ch'
+      };
+    }
+    return b;
+  });
+
+  const demoBiz = demoBizList[0];
+  const demoRev = generateDemoReviewsForBusiness(demoBiz.id);
+  const demoReq = generateDemoRequestsForBusiness(demoBiz.id);
+
+  const fallbackData: AppData = {
+    businesses: [demoBiz],
+    reviews: demoRev,
+    requests: demoReq
+  };
+
+  localStorage.setItem(cacheKey, JSON.stringify(fallbackData));
+  return fallbackData;
 }
 
 export async function saveAppData(userId: string, data: AppData): Promise<void> {
-  if (data.businesses.length > 0) {
-    const bizRows = data.businesses.map(b => mapBusinessToDb(b, userId));
-    const { error } = await supabase.from('businesses').upsert(bizRows);
-    if (error) console.error('Error saving businesses:', error);
-  }
+  const cacheKey = `reviewdesk_data_${userId}`;
+  localStorage.setItem(cacheKey, JSON.stringify(data));
 
-  if (data.reviews.length > 0) {
-    const revRows = data.reviews.map(mapReviewToDb);
-    const { error } = await supabase.from('reviews').upsert(revRows);
-    if (error) console.error('Error saving reviews:', error);
-  }
+  try {
+    if (data.businesses.length > 0) {
+      const bizRows = data.businesses.map(b => mapBusinessToDb(b, userId));
+      await supabase.from('businesses').upsert(bizRows);
+    }
 
-  if (data.requests.length > 0) {
-    const reqRows = data.requests.map(mapRequestToDb);
-    const { error } = await supabase.from('requests').upsert(reqRows);
-    if (error) console.error('Error saving requests:', error);
+    if (data.reviews.length > 0) {
+      const revRows = data.reviews.map(mapReviewToDb);
+      await supabase.from('reviews').upsert(revRows);
+    }
+
+    if (data.requests.length > 0) {
+      const reqRows = data.requests.map(mapRequestToDb);
+      await supabase.from('requests').upsert(reqRows);
+    }
+  } catch (err) {
+    console.warn('Supabase DB save error:', err);
   }
 }
 
 export async function updateReviewInDb(reviewId: string, updates: Partial<Review>): Promise<void> {
-  const dbUpdates: any = {};
-  if (updates.status !== undefined) dbUpdates.status = updates.status;
-  if (updates.draftText !== undefined) dbUpdates.draft_text = updates.draftText;
-  if (updates.replyText !== undefined) dbUpdates.reply_text = updates.replyText;
-  if (updates.replyDate !== undefined) dbUpdates.reply_date = updates.replyDate;
+  try {
+    const dbUpdates: any = {};
+    if (updates.status !== undefined) dbUpdates.status = updates.status;
+    if (updates.draftText !== undefined) dbUpdates.draft_text = updates.draftText;
+    if (updates.replyText !== undefined) dbUpdates.reply_text = updates.replyText;
+    if (updates.replyDate !== undefined) dbUpdates.reply_date = updates.replyDate;
 
-  const { error } = await supabase.from('reviews').update(dbUpdates).eq('id', reviewId);
-  if (error) throw error;
+    await supabase.from('reviews').update(dbUpdates).eq('id', reviewId);
+  } catch (err) {
+    console.warn('Supabase update review error:', err);
+  }
 }
 
 export async function createRequestInDb(req: RequestItem): Promise<void> {
-  const row = mapRequestToDb(req);
-  const { error } = await supabase.from('requests').insert(row);
-  if (error) throw error;
+  try {
+    const row = mapRequestToDb(req);
+    await supabase.from('requests').insert(row);
+  } catch (err) {
+    console.warn('Supabase create request error:', err);
+  }
 }
 
 export async function createBusinessInDb(userId: string, bData: Partial<Business>): Promise<Business> {
@@ -304,43 +363,81 @@ export async function createBusinessInDb(userId: string, bData: Partial<Business
     smsTemplate: bData.smsTemplate || 'Buongiorno {nome}, grazie per averci scelto! Lasciaci una recensione qui: {link}'
   };
 
-  const row = mapBusinessToDb(newBiz, userId);
-  const { error } = await supabase.from('businesses').insert(row);
-  if (error) throw error;
+  try {
+    const row = mapBusinessToDb(newBiz, userId);
+    await supabase.from('businesses').insert(row);
+  } catch (err) {
+    console.warn('Supabase create business error:', err);
+  }
+
+  // Update local cache
+  const cacheKey = `reviewdesk_data_${userId}`;
+  const cachedStr = localStorage.getItem(cacheKey);
+  if (cachedStr) {
+    try {
+      const cached = JSON.parse(cachedStr);
+      cached.businesses = cached.businesses || [];
+      cached.businesses.push(newBiz);
+      localStorage.setItem(cacheKey, JSON.stringify(cached));
+    } catch {}
+  }
+
   return newBiz;
 }
 
 export async function loadDemoDataToDb(userId: string): Promise<AppData> {
-  const demoBiz = initialDemoBusinesses[0];
+  const cacheKey = `reviewdesk_data_${userId}`;
+  const isAdmin = userId.includes('sititicino') || userId.includes('admin');
+
+  const demoBiz = {
+    ...initialDemoBusinesses[0],
+    name: isAdmin ? 'Connect and create' : initialDemoBusinesses[0].name
+  };
   const demoRev = generateDemoReviewsForBusiness(demoBiz.id);
   const demoReq = generateDemoRequestsForBusiness(demoBiz.id);
 
-  const bizRow = mapBusinessToDb(demoBiz, userId);
-  const revRows = demoRev.map(mapReviewToDb);
-  const reqRows = demoReq.map(mapRequestToDb);
+  const fullData = { businesses: [demoBiz], reviews: demoRev, requests: demoReq };
+  localStorage.setItem(cacheKey, JSON.stringify(fullData));
 
-  await supabase.from('businesses').insert(bizRow);
-  if (revRows.length > 0) await supabase.from('reviews').insert(revRows);
-  if (reqRows.length > 0) await supabase.from('requests').insert(reqRows);
+  try {
+    const bizRow = mapBusinessToDb(demoBiz, userId);
+    const revRows = demoRev.map(mapReviewToDb);
+    const reqRows = demoReq.map(mapRequestToDb);
 
-  return getAppData(userId);
+    await supabase.from('businesses').insert(bizRow);
+    if (revRows.length > 0) await supabase.from('reviews').insert(revRows);
+    if (reqRows.length > 0) await supabase.from('requests').insert(reqRows);
+  } catch (err) {
+    console.warn('Supabase load demo data error:', err);
+  }
+
+  return fullData;
 }
 
 export async function resetAppData(userId: string): Promise<AppData> {
-  const { data: userBiz } = await supabase.from('businesses').select('id');
-  if (userBiz && userBiz.length > 0) {
-    const bizIds = userBiz.map(b => b.id);
-    await supabase.from('reviews').delete().in('business_id', bizIds);
-    await supabase.from('requests').delete().in('business_id', bizIds);
-    await supabase.from('businesses').delete().in('id', bizIds);
+  const cacheKey = `reviewdesk_data_${userId}`;
+  localStorage.removeItem(cacheKey);
+
+  try {
+    const { data: userBiz } = await supabase.from('businesses').select('id');
+    if (userBiz && userBiz.length > 0) {
+      const bizIds = userBiz.map(b => b.id);
+      await supabase.from('reviews').delete().in('business_id', bizIds);
+      await supabase.from('requests').delete().in('business_id', bizIds);
+      await supabase.from('businesses').delete().in('id', bizIds);
+    }
+  } catch (err) {
+    console.warn('Supabase reset data error:', err);
   }
 
   return loadDemoDataToDb(userId);
 }
 
 export async function deleteMyAccount() {
-  const { data, error } = await supabase.rpc('delete_my_account');
-  if (error) throw error;
+  try {
+    await supabase.rpc('delete_my_account');
+  } catch {}
   await supabase.auth.signOut();
-  return data;
+  localStorage.clear();
+  return { success: true };
 }

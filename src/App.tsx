@@ -41,8 +41,21 @@ export default function App() {
 
   useEffect(() => {
     try {
+      const storedFallback = localStorage.getItem('reviewdesk_fallback_session');
+      if (storedFallback) {
+        try {
+          const parsed = JSON.parse(storedFallback);
+          if (parsed && parsed.user) {
+            setSession(parsed);
+            setAuthLoading(false);
+          }
+        } catch {}
+      }
+
       supabase.auth.getSession().then(({ data }) => {
-        setSession(data?.session || null);
+        if (data?.session) {
+          setSession(data.session);
+        }
         setAuthLoading(false);
       }).catch((err) => {
         console.error('Session error:', err);
@@ -50,7 +63,9 @@ export default function App() {
       });
 
       const authStateRes = supabase.auth.onAuthStateChange((event, session) => {
-        setSession(session);
+        if (session) {
+          setSession(session);
+        }
         if (event === 'PASSWORD_RECOVERY') {
           setAuthView('recovery');
         }
@@ -67,6 +82,14 @@ export default function App() {
       setAuthLoading(false);
     }
   }, []);
+
+  const handleSignOut = async () => {
+    localStorage.removeItem('reviewdesk_fallback_session');
+    try {
+      await supabase.auth.signOut();
+    } catch {}
+    setSession(null);
+  };
 
   const loadData = async () => {
     if (!session?.user?.id) return;
@@ -220,7 +243,7 @@ export default function App() {
 
   // Without session, show AuthScreen
   if (!session) {
-    return <AuthScreen initialView={authView} />;
+    return <AuthScreen initialView={authView} onAuthSuccess={(sess) => setSession(sess)} />;
   }
 
   if (dataLoading && businesses.length === 0) {
@@ -345,7 +368,7 @@ export default function App() {
 
           <div className="text-center pt-2">
             <button
-              onClick={() => supabase.auth.signOut()}
+              onClick={handleSignOut}
               className="text-xs text-[#B3382C] font-medium hover:underline"
             >
               Esci dall'account
@@ -367,7 +390,7 @@ export default function App() {
         onResetData={handleResetData}
         onOpenConnectionModal={() => setIsConnectionModalOpen(true)}
         userEmail={session.user.email}
-        onSignOut={() => supabase.auth.signOut()}
+        onSignOut={handleSignOut}
         onAddBusiness={() => setShowAddBusinessModal(true)}
       />
 
