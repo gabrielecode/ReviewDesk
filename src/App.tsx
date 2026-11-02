@@ -22,7 +22,7 @@ export default function App() {
   const [currentBusinessId, setCurrentBusinessId] = useState<string>('');
   const [reviews, setReviews] = useState<Review[]>([]);
   const [requests, setRequests] = useState<RequestItem[]>([]);
-  const [activeTab, setActiveTab] = useState<string>('landing');
+  const [activeTab, setActiveTab] = useState<string>('reviews');
   const [isConnectionModalOpen, setIsConnectionModalOpen] = useState<boolean>(false);
   
   const [dataLoading, setDataLoading] = useState<boolean>(false);
@@ -176,6 +176,10 @@ export default function App() {
 
   const currentReviews = reviews.filter(r => r.businessId === currentBusiness?.id);
   const currentRequests = requests.filter(r => r.businessId === currentBusiness?.id);
+
+  if (activeTab === 'landing') {
+    return <LandingPage onOpenDashboard={() => setActiveTab('reviews')} />;
+  }
 
   // If Supabase is not configured
   if (!isSupabaseConfigured) {
@@ -339,10 +343,6 @@ export default function App() {
         </div>
       </div>
     );
-  }
-
-  if (activeTab === 'landing') {
-    return <LandingPage onOpenDashboard={() => setActiveTab('reviews')} />;
   }
 
   return (

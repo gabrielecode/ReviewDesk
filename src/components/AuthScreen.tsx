@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { MessageSquare, Lock, Mail, ArrowRight, AlertCircle, CheckCircle } from 'lucide-react';
+import { MessageSquare, Lock, Mail, ArrowRight, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react';
 
 interface AuthScreenProps {
   initialView?: 'login' | 'register' | 'forgot' | 'recovery';
 }
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login' }) => {
-  const [view, setView] = useState<'login' | 'register' | 'forgot' | 'recovery'>(initialView);
+  const isSignupsOpen = import.meta.env.VITE_SIGNUPS_OPEN === 'true';
+  const [view, setView] = useState<'login' | 'register' | 'forgot' | 'recovery'>(
+    !isSignupsOpen && initialView === 'register' ? 'login' : initialView
+  );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -48,14 +51,14 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login' })
           email, 
           password,
           options: {
-            emailRedirectTo: window.location.origin
+            emailRedirectTo: window.location.origin + '/app/'
           }
         });
         if (error) throw error;
         setSuccessMessage('Controlla la tua email per confermare l\'account.');
       } else if (view === 'forgot') {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: window.location.origin
+          redirectTo: window.location.origin + '/app/'
         });
         if (error) throw error;
         setSuccessMessage('Ti abbiamo inviato un\'email con le istruzioni per reimpostare la password.');
@@ -85,7 +88,14 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login' })
 
   return (
     <div className="min-h-screen bg-[#F6F7F5] flex items-center justify-center p-4 font-sans text-[#1C2321]">
-      <div className="max-w-md w-full panel-card p-8 space-y-6 shadow-sm bg-white">
+      <div className="max-w-md w-full panel-card p-8 space-y-6 shadow-sm bg-white relative">
+        {/* Torna al sito link */}
+        <div className="flex items-center justify-between text-xs">
+          <a href="/" className="text-[#1F5F4A] hover:underline font-medium inline-flex items-center gap-1">
+            <ArrowLeft className="w-3.5 h-3.5" /> Torna al sito
+          </a>
+        </div>
+
         {/* Header */}
         <div className="text-center space-y-2">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-[#E8F0EC] text-[#1F5F4A] mb-1">
@@ -98,7 +108,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login' })
         </div>
 
         {/* Tab switch */}
-        {view !== 'recovery' && (
+        {view !== 'recovery' && isSignupsOpen && (
           <div className="flex rounded-[6px] bg-[#F6F7F5] p-1 border border-[#E5E7E3] text-xs">
             <button
               type="button"
@@ -182,7 +192,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login' })
             </div>
           )}
 
-          {view === 'register' && (
+          {view === 'register' && isSignupsOpen && (
             <div className="space-y-1">
               <label className="text-xs font-medium text-[#667069] block">Conferma password</label>
               <div className="relative">
@@ -213,6 +223,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login' })
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
+
+        {!isSignupsOpen && view === 'login' && (
+          <div className="text-center pt-3 border-t border-[#E5E7E3]">
+            <p className="text-xs text-[#667069]">
+              L'accesso è su invito durante il periodo pilota.{' '}
+              <a href="/#richiesta" className="text-[#1F5F4A] font-medium underline">
+                Richiedilo dalla home
+              </a>
+            </p>
+          </div>
+        )}
 
         {view === 'forgot' && (
           <div className="text-center pt-2">
