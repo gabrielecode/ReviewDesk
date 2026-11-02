@@ -40,22 +40,32 @@ export default function App() {
   const currentBusiness = businesses.find(b => b.id === currentBusinessId) || businesses[0] || null;
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setAuthLoading(false);
-    });
+    try {
+      supabase.auth.getSession().then(({ data }) => {
+        setSession(data?.session || null);
+        setAuthLoading(false);
+      }).catch((err) => {
+        console.error('Session error:', err);
+        setAuthLoading(false);
+      });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setSession(session);
-      if (event === 'PASSWORD_RECOVERY') {
-        setAuthView('recovery');
-      }
-      setAuthLoading(false);
-    });
+      const authStateRes = supabase.auth.onAuthStateChange((event, session) => {
+        setSession(session);
+        if (event === 'PASSWORD_RECOVERY') {
+          setAuthView('recovery');
+        }
+        setAuthLoading(false);
+      });
 
-    return () => {
-      subscription.unsubscribe();
-    };
+      const subscription = authStateRes?.data?.subscription;
+
+      return () => {
+        subscription?.unsubscribe();
+      };
+    } catch (err) {
+      console.error('Auth setup error:', err);
+      setAuthLoading(false);
+    }
   }, []);
 
   const loadData = async () => {
