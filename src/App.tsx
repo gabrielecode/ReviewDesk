@@ -47,13 +47,13 @@ export default function App() {
   const handleResetData = () => {
     if (!currentBusinessId) return;
     const currentBiz = businesses.find(b => b.id === currentBusinessId);
-    if (!confirm(`Vuoi ripristinare i dati demo iniziali per ${currentBiz?.name || 'questa attività'}?`)) return;
+    if (!confirm(`Ripristinare i dati demo per ${currentBiz?.name || 'questa attività'}?`)) return;
 
     const freshData = resetAppData();
     setBusinesses(freshData.businesses);
     setReviews(freshData.reviews);
     setRequests(freshData.requests);
-    alert('Dati demo ripristinati con successo!');
+    alert('Dati ripristinati');
   };
 
   const handleRefreshReviews = () => {
@@ -71,19 +71,14 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-100">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500 flex items-center justify-center text-slate-950 font-black text-2xl animate-pulse shadow-lg shadow-amber-500/20">
-            R
-          </div>
-          <p className="text-sm font-medium text-slate-400">Caricamento ReviewDesk...</p>
-        </div>
+      <div className="min-h-screen bg-[#F6F7F5] flex items-center justify-center text-[#1C2321]">
+        <p className="text-xs text-[#667069]">Caricamento in corso...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col md:flex-row font-sans selection:bg-amber-500 selection:text-slate-950">
+    <div className="min-h-screen bg-[#F6F7F5] text-[#1C2321] flex flex-col md:flex-row font-sans">
       <Sidebar
         businesses={businesses}
         currentBusiness={currentBusiness}
@@ -94,8 +89,8 @@ export default function App() {
         onOpenConnectionModal={() => setIsConnectionModalOpen(true)}
       />
 
-      <main className="flex-1 flex flex-col min-w-0 pb-24 md:pb-0 overflow-y-auto">
-        <div className="flex-1 p-4 sm:p-8 max-w-7xl w-full mx-auto space-y-6">
+      <main className="flex-1 flex flex-col min-w-0 pb-16 md:pb-0 overflow-y-auto">
+        <div className="flex-1 p-6 md:p-8 max-w-7xl w-full mx-auto space-y-6">
           {activeTab === 'reviews' && currentBusiness && (
             <ReviewsTab
               business={currentBusiness}

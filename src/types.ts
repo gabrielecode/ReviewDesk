@@ -22,6 +22,7 @@ export interface Review {
   date: string;
   status: 'da_rispondere' | 'bozza_pronta' | 'pubblicata';
   replyText?: string;
+  replyDate?: string;
 }
 
 export interface RequestItem {

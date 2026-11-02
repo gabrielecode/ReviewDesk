@@ -1,1 +1,75 @@
 @import "tailwindcss";
+
+@layer base {
+  :root {
+    --page-bg: #F6F7F5;
+    --surface: #FFFFFF;
+    --border: #E5E7E3;
+    --text-main: #1C2321;
+    --text-secondary: #667069;
+    --accent: #1F5F4A;
+    --accent-hover: #174A39;
+    --accent-light: #E8F0EC;
+    --star: #E7A100;
+    --status-da-rispondere: #946300;
+    --status-bozza: #2F5D9E;
+    --status-pubblicata: #1F5F4A;
+    --status-attenzione: #B3382C;
+  }
+
+  body {
+    background-color: var(--page-bg);
+    color: var(--text-main);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+}
+
+/* Custom utility overrides */
+.btn-primary {
+  background-color: var(--accent);
+  color: #FFFFFF;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: background-color 0.15s ease;
+}
+.btn-primary:hover {
+  background-color: var(--accent-hover);
+}
+
+.btn-secondary {
+  background-color: #FFFFFF;
+  color: var(--text-main);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-weight: 500;
+  transition: background-color 0.15s ease;
+}
+.btn-secondary:hover {
+  background-color: #F0F2EE;
+}
+
+.panel-card {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.input-field {
+  background-color: #FFFFFF;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-main);
+  padding: 8px 12px;
+  font-size: 14px;
+}
+.input-field:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Dropdown shadow */
+.dropdown-shadow {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}

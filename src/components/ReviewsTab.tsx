@@ -1,16 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Star, 
-  MessageSquare, 
-  CheckCircle2, 
-  Clock, 
-  AlertTriangle, 
-  Sparkles, 
-  Send, 
-  X, 
-  RotateCcw, 
-  Filter,
-  Trash2
+  Search,
+  RotateCcw,
+  ArrowLeft
 } from 'lucide-react';
 import { Review, Business } from '../types';
 import { getAppData, saveAppData } from '../storage';
@@ -28,7 +21,8 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
 }) => {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterStars, setFilterStars] = useState<number | 'all'>('all');
-  const [selectedReview, setSelectedReview] = useState<Review | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
   const [draftReplyText, setDraftReplyText] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
@@ -38,21 +32,40 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
   const filteredReviews = reviews.filter((r) => {
     if (filterStatus !== 'all' && r.status !== filterStatus) return false;
     if (filterStars !== 'all' && r.stars !== filterStars) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchAuthor = r.author.toLowerCase().includes(q);
+      const matchText = r.text.toLowerCase().includes(q);
+      if (!matchAuthor && !matchText) return false;
+    }
     return true;
   });
 
-  const handleOpenDraft = async (review: Review) => {
-    setSelectedReview(review);
-    setGenerationError(null);
-    if (review.replyText) {
-      setDraftReplyText(review.replyText);
-    } else {
-      await generateDraft(review);
+  // Default selection on desktop if none selected
+  useEffect(() => {
+    if (filteredReviews.length > 0 && (!selectedReviewId || !filteredReviews.some(r => r.id === selectedReviewId))) {
+      setSelectedReviewId(filteredReviews[0].id);
+    } else if (filteredReviews.length === 0) {
+      setSelectedReviewId(null);
     }
-  };
+  }, [filteredReviews.length, filterStatus, filterStars, business.id]);
 
-  const generateDraft = async (reviewToUse?: Review) => {
-    const target = reviewToUse || selectedReview;
+  const selectedReview = reviews.find(r => r.id === selectedReviewId) || null;
+
+  // Sync draft text when selected review changes
+  useEffect(() => {
+    if (selectedReview) {
+      if (selectedReview.replyText) {
+        setDraftReplyText(selectedReview.replyText);
+      } else {
+        setDraftReplyText('');
+      }
+      setGenerationError(null);
+    }
+  }, [selectedReviewId]);
+
+  const handleGenerateDraft = async (rev?: Review) => {
+    const target = rev || selectedReview;
     if (!target) return;
 
     setIsGenerating(true);
@@ -73,20 +86,18 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Errore di comunicazione con il server AI');
+        throw new Error(errData.error || 'Errore di generazione risposta');
       }
       const data = await res.json();
       setDraftReplyText(data.draft);
 
-      // Save draft to localStorage
       const appData = getAppData();
       const updatedReviews = appData.reviews.map(r => r.id === target.id ? { ...r, replyText: data.draft, status: 'bozza_pronta' as const } : r);
       saveAppData({ ...appData, reviews: updatedReviews });
-
       onRefreshReviews();
     } catch (err: any) {
       console.error(err);
-      setGenerationError(err.message || 'Si è verificato un errore durante la generazione della bozza.');
+      setGenerationError(err.message || 'Impossibile generare la bozza.');
     } finally {
       setIsGenerating(false);
     }
@@ -96,14 +107,18 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
     if (!selectedReview) return;
     setIsSaving(true);
     try {
+      const today = new Date().toISOString().split('T')[0];
       const appData = getAppData();
-      const updatedReviews = appData.reviews.map(r => r.id === selectedReview.id ? { ...r, replyText: draftReplyText, status: 'pubblicata' as const } : r);
+      const updatedReviews = appData.reviews.map(r => r.id === selectedReview.id ? { 
+        ...r, 
+        replyText: draftReplyText, 
+        status: 'pubblicata' as const,
+        replyDate: today
+      } : r);
       saveAppData({ ...appData, reviews: updatedReviews });
-
       onRefreshReviews();
-      setSelectedReview(null);
     } catch (err) {
-      alert('Errore durante la pubblicazione della risposta.');
+      alert('Errore durante la pubblicazione.');
     } finally {
       setIsSaving(false);
     }
@@ -114,11 +129,9 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
     setIsSaving(true);
     try {
       const appData = getAppData();
-      const updatedReviews = appData.reviews.map(r => r.id === selectedReview.id ? { ...r, replyText: undefined, status: 'da_rispondere' as const } : r);
+      const updatedReviews = appData.reviews.map(r => r.id === selectedReview.id ? { ...r, replyText: undefined, replyDate: undefined, status: 'da_rispondere' as const } : r);
       saveAppData({ ...appData, reviews: updatedReviews });
-
       onRefreshReviews();
-      setSelectedReview(null);
     } catch (err) {
       alert('Errore durante lo scarto.');
     } finally {
@@ -126,265 +139,273 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
     }
   };
 
-  const getStatusBadge = (status: Review['status']) => {
+  // Metrics summary
+  const totalReviewsCount = reviews.length;
+  const daRispondereCount = reviews.filter(r => r.status === 'da_rispondere').length;
+  const bozzaProntaCount = reviews.filter(r => r.status === 'bozza_pronta').length;
+  const avgStarsVal = totalReviewsCount > 0 ? (reviews.reduce((acc, r) => acc + r.stars, 0) / totalReviewsCount).toFixed(1) : '0.0';
+  const answeredCountVal = reviews.filter(r => r.status === 'pubblicata' || r.replyText).length;
+  const answeredPctVal = totalReviewsCount > 0 ? Math.round((answeredCountVal / totalReviewsCount) * 100) : 0;
+
+  const renderStatusIndicator = (status: Review['status']) => {
     switch (status) {
       case 'pubblicata':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Pubblicata
+          <span className="flex items-center gap-1.5 text-[12px] text-[#1F5F4A]">
+            <span className="w-2 h-2 rounded-full bg-[#1F5F4A]"></span> Pubblicata
           </span>
         );
       case 'bozza_pronta':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-            <Sparkles className="w-3.5 h-3.5" /> Bozza pronta
+          <span className="flex items-center gap-1.5 text-[12px] text-[#2F5D9E]">
+            <span className="w-2 h-2 rounded-full bg-[#2F5D9E]"></span> Bozza pronta
           </span>
         );
       case 'da_rispondere':
       default:
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700">
-            <Clock className="w-3.5 h-3.5 text-slate-400" /> Da rispondere
+          <span className="flex items-center gap-1.5 text-[12px] text-[#946300]">
+            <span className="w-2 h-2 rounded-full bg-[#946300]"></span> Da rispondere
           </span>
         );
     }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header & Filters */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl">
+    <div className="space-y-4 max-w-7xl mx-auto">
+      {/* Top Summary Line */}
+      <div className="panel-card px-4 py-3 flex flex-wrap items-center justify-between text-xs text-[#667069] gap-2">
         <div>
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <MessageSquare className="w-6 h-6 text-amber-400" />
-            Gestione Recensioni Google
-          </h2>
-          <p className="text-sm text-slate-400 mt-1">
-            Visualizza le recensioni di <span className="text-white font-medium">{business.name}</span> e prepara risposte professionali con l'IA.
-          </p>
+          Da rispondere <strong className="text-[#1C2321]">{daRispondereCount}</strong> · 
+          Bozze pronte <strong className="text-[#1C2321]">{bozzaProntaCount}</strong> · 
+          Media <strong className="text-[#1C2321]">{avgStarsVal}</strong> · 
+          Risposte <strong className="text-[#1C2321]">{answeredPctVal}%</strong>
         </div>
-
-        {/* Filter Controls */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded-xl border border-slate-800">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="bg-transparent text-xs text-white focus:outline-none font-medium cursor-pointer"
-            >
-              <option value="all" className="bg-slate-900">Tutti gli stati</option>
-              <option value="da_rispondere" className="bg-slate-900">Da rispondere</option>
-              <option value="bozza_pronta" className="bg-slate-900">Bozza pronta</option>
-              <option value="pubblicata" className="bg-slate-900">Pubblicate</option>
-            </select>
-          </div>
-
-          <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded-xl border border-slate-800">
-            <Star className="w-4 h-4 text-amber-400" />
-            <select
-              value={filterStars}
-              onChange={(e) => setFilterStars(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-              className="bg-transparent text-xs text-white focus:outline-none font-medium cursor-pointer"
-            >
-              <option value="all" className="bg-slate-900">Tutte le stelle</option>
-              <option value="5" className="bg-slate-900">5 Stelle</option>
-              <option value="4" className="bg-slate-900">4 Stelle</option>
-              <option value="3" className="bg-slate-900">3 Stelle</option>
-              <option value="2" className="bg-slate-900">2 Stelle</option>
-              <option value="1" className="bg-slate-900">1 Stella</option>
-            </select>
-          </div>
+        <div className="text-[12px]">
+          {filteredReviews.length} recensioni visualizzate
         </div>
       </div>
 
-      {/* Reviews List */}
-      <div className="grid grid-cols-1 gap-4">
-        {filteredReviews.length === 0 ? (
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center space-y-3">
-            <MessageSquare className="w-12 h-12 text-slate-600 mx-auto" />
-            <p className="text-slate-300 font-medium">Nessuna recensione trovata con i filtri selezionati</p>
-            <button
-              onClick={() => { setFilterStatus('all'); setFilterStars('all'); }}
-              className="text-xs text-amber-400 hover:underline font-semibold"
-            >
-              Reimposta filtri
-            </button>
-          </div>
-        ) : (
-          filteredReviews.map((review) => {
-            const isNegative = review.stars <= 2;
-            return (
-              <div
-                key={review.id}
-                className={`bg-slate-900 border rounded-2xl p-6 transition hover:border-slate-700 shadow-lg relative overflow-hidden ${
-                  isNegative ? 'border-rose-500/40 bg-gradient-to-r from-rose-950/10 to-slate-900' : 'border-slate-800'
-                }`}
-              >
-                {isNegative && (
-                  <div className="absolute top-0 right-0 bg-rose-500 text-slate-950 text-[10px] font-bold px-3 py-1 rounded-bl-xl uppercase tracking-wider flex items-center gap-1 shadow-sm">
-                    <AlertTriangle className="w-3 h-3" /> Richiede attenzione
-                  </div>
-                )}
+      {/* Filters and Search Bar */}
+      <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="input-field text-xs py-1.5 px-3"
+          >
+            <option value="all">Tutti gli stati</option>
+            <option value="da_rispondere">Da rispondere</option>
+            <option value="bozza_pronta">Bozze pronte</option>
+            <option value="pubblicata">Pubblicate</option>
+          </select>
 
-                <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                  <div className="space-y-2 flex-1">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center font-bold text-amber-400 border border-slate-700 text-sm">
-                        {review.author.charAt(0)}
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-white text-base">{review.author}</h3>
-                        <p className="text-xs text-slate-400">{review.date}</p>
-                      </div>
+          <select
+            value={filterStars}
+            onChange={(e) => setFilterStars(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+            className="input-field text-xs py-1.5 px-3"
+          >
+            <option value="all">Tutte le stelle</option>
+            <option value="5">5 Stelle</option>
+            <option value="4">4 Stelle</option>
+            <option value="3">3 Stelle</option>
+            <option value="2">2 Stelle</option>
+            <option value="1">1 Stella</option>
+          </select>
+        </div>
+
+        <div className="relative w-full sm:w-64">
+          <Search className="w-3.5 h-3.5 text-[#667069] absolute left-3 top-2.5" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Cerca per autore o testo..."
+            className="input-field text-xs w-full pl-9 py-1.5"
+          />
+        </div>
+      </div>
+
+      {/* Two-Panel Layout */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+        {/* Left List Panel */}
+        <div className={`md:col-span-5 panel-card overflow-hidden ${selectedReviewId && 'hidden md:block'}`}>
+          <div className="divide-y divide-[#E5E7E3] max-h-[calc(100vh-240px)] overflow-y-auto">
+            {filteredReviews.length === 0 ? (
+              <div className="p-8 text-center space-y-2">
+                <p className="text-xs text-[#667069]">Nessuna recensione trovata.</p>
+                <button
+                  onClick={() => { setFilterStatus('all'); setFilterStars('all'); setSearchQuery(''); }}
+                  className="text-xs text-[#1F5F4A] font-medium hover:underline"
+                >
+                  Reimposta filtri
+                </button>
+              </div>
+            ) : (
+              filteredReviews.map((rev) => {
+                const isSelected = rev.id === selectedReviewId;
+                const snippet = rev.text ? (rev.text.length > 90 ? rev.text.substring(0, 90) + '...' : rev.text) : '(Nessun testo)';
+                return (
+                  <div
+                    key={rev.id}
+                    onClick={() => setSelectedReviewId(rev.id)}
+                    className={`p-3.5 cursor-pointer transition text-left ${
+                      isSelected ? 'bg-[#E8F0EC]/60 border-l-4 border-l-[#1F5F4A]' : 'hover:bg-[#F6F7F5]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-semibold text-xs text-[#1C2321]">{rev.author}</span>
+                      <span className="text-[11px] text-[#667069]">{rev.date}</span>
                     </div>
 
-                    <div className="flex items-center gap-1 text-amber-400 pt-1">
+                    <div className="flex items-center gap-1 mb-1.5">
                       {Array.from({ length: 5 }).map((_, i) => (
                         <Star
                           key={i}
-                          className={`w-4 h-4 ${i < review.stars ? 'fill-amber-400 text-amber-400' : 'text-slate-700'}`}
+                          className={`w-3 h-3 ${i < rev.stars ? 'fill-[#E7A100] text-[#E7A100]' : 'text-[#E5E7E3]'}`}
                         />
                       ))}
-                      <span className="text-xs text-slate-400 ml-2 font-medium">({review.stars}/5)</span>
                     </div>
 
-                    <p className="text-slate-200 text-sm pt-1 leading-relaxed">
-                      {review.text || <span className="italic text-slate-500">(Nessun testo, solo valutazione a stelle)</span>}
+                    <p className="text-xs text-[#667069] line-clamp-2 mb-2 leading-relaxed">
+                      {snippet}
                     </p>
 
-                    {review.replyText && (
-                      <div className="mt-4 bg-slate-950/60 p-4 rounded-xl border border-slate-800/80 space-y-1">
-                        <p className="text-xs font-semibold text-amber-400 flex items-center gap-1.5">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Risposta pubblicata:
-                        </p>
-                        <p className="text-xs text-slate-300 italic">{review.replyText}</p>
-                      </div>
-                    )}
+                    <div>
+                      {renderStatusIndicator(rev.status)}
+                    </div>
                   </div>
+                );
+              })
+            )}
+          </div>
+        </div>
 
-                  <div className="flex md:flex-col items-center md:items-end justify-between gap-3 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-800">
-                    {getStatusBadge(review.status)}
-
-                    <button
-                      onClick={() => handleOpenDraft(review)}
-                      className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition shadow-md shadow-amber-500/20 flex items-center gap-2"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      {review.status === 'pubblicata' ? 'Modifica risposta' : review.status === 'bozza_pronta' ? 'Visualizza bozza' : 'Prepara risposta'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      {/* Draft Reply Modal / Panel */}
-      {selectedReview && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
-            <div className="p-6 border-b border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-                  <Sparkles className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">Risposta a {selectedReview.author}</h3>
-                  <p className="text-xs text-slate-400">Valutazione: {selectedReview.stars} stelle • {selectedReview.date}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedReview(null)}
-                className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-5">
-              <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Recensione cliente:</p>
-                <p className="text-sm text-slate-200 italic">"{selectedReview.text || 'Solo stelle'}"</p>
+        {/* Right Detail Panel */}
+        <div className={`md:col-span-7 panel-card p-5 ${!selectedReviewId && 'hidden md:block'}`}>
+          {selectedReview ? (
+            <div className="space-y-4">
+              {/* Mobile Back Button */}
+              <div className="md:hidden pb-2 border-b border-[#E5E7E3]">
+                <button
+                  onClick={() => setSelectedReviewId(null)}
+                  className="flex items-center gap-1 text-xs text-[#1F5F4A] font-medium"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" /> Torna alla lista
+                </button>
               </div>
 
+              {/* Warning bar for 1-2 stars */}
               {selectedReview.stars <= 2 && (
-                <div className="bg-rose-500/10 border border-rose-500/30 p-3 rounded-xl flex items-center gap-3 text-rose-300 text-xs font-medium">
-                  <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
-                  <span>Rileggi con cura prima di pubblicare. Questa recensione richiede attenzione particolare e tatto.</span>
+                <div className="bg-[#B3382C]/10 border border-[#B3382C]/30 px-3 py-2 rounded-[6px] text-xs text-[#B3382C] font-medium">
+                  Richiede attenzione: rileggi con cura prima di pubblicare.
                 </div>
               )}
 
-              <div className="space-y-2">
+              {/* Review Header */}
+              <div className="flex items-center justify-between border-b border-[#E5E7E3] pb-3">
+                <div>
+                  <h3 className="font-semibold text-sm text-[#1C2321]">{selectedReview.author}</h3>
+                  <p className="text-xs text-[#667069]">{selectedReview.date}</p>
+                </div>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Star
+                      key={i}
+                      className={`w-3.5 h-3.5 ${i < selectedReview.stars ? 'fill-[#E7A100] text-[#E7A100]' : 'text-[#E5E7E3]'}`}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Full Review Text */}
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-[#667069] uppercase tracking-wide">Testo recensione:</p>
+                <p className="text-xs text-[#1C2321] leading-relaxed bg-[#F6F7F5] p-3 rounded-[6px] border border-[#E5E7E3]">
+                  {selectedReview.text || '(Nessun testo, solo valutazione a stelle)'}
+                </p>
+              </div>
+
+              {/* Published Reply Block if already published */}
+              {selectedReview.status === 'pubblicata' && selectedReview.replyText && (
+                <div className="space-y-1 bg-[#F6F7F5] p-3 rounded-[6px] border border-[#E5E7E3]">
+                  <p className="text-xs font-semibold text-[#1F5F4A]">
+                    Risposta pubblicata il {selectedReview.replyDate || selectedReview.date}:
+                  </p>
+                  <p className="text-xs text-[#1C2321] leading-relaxed">
+                    {selectedReview.replyText}
+                  </p>
+                </div>
+              )}
+
+              {/* Response Editor Section */}
+              <div className="space-y-2 pt-2 border-t border-[#E5E7E3]">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Bozza generata da Gemini (Modificabile)
+                  <label className="text-xs font-semibold text-[#1C2321]">
+                    {selectedReview.status === 'pubblicata' ? 'Modifica risposta pubblicata' : 'Bozza risposta'}
                   </label>
                   <button
-                    onClick={() => generateDraft()}
+                    onClick={() => handleGenerateDraft()}
                     disabled={isGenerating}
-                    className="text-xs text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 disabled:opacity-50"
+                    className="text-xs text-[#1F5F4A] hover:underline font-medium flex items-center gap-1 disabled:opacity-50"
                   >
                     <RotateCcw className={`w-3 h-3 ${isGenerating ? 'animate-spin' : ''}`} />
-                    Rigenera con IA
+                    Genera risposta
                   </button>
                 </div>
 
-                {generationError ? (
-                  <div className="bg-rose-500/10 border border-rose-500/30 p-4 rounded-xl space-y-3 text-center">
-                    <p className="text-xs text-rose-300">{generationError}</p>
-                    <button
-                      onClick={() => generateDraft()}
-                      className="px-4 py-2 rounded-lg bg-rose-500 text-slate-950 text-xs font-bold hover:bg-rose-400 transition"
-                    >
-                      Riprova
-                    </button>
-                  </div>
-                ) : (
-                  <textarea
-                    value={draftReplyText}
-                    onChange={(e) => setDraftReplyText(e.target.value)}
-                    rows={5}
-                    disabled={isGenerating}
-                    placeholder="Generazione bozza in corso..."
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-slate-100 focus:outline-none focus:border-amber-500 transition leading-relaxed disabled:opacity-50"
-                  />
+                {generationError && (
+                  <p className="text-xs text-[#B3382C]">{generationError}</p>
                 )}
-                <p className="text-[11px] text-slate-500 text-right">
-                  Firmato come: <span className="font-semibold text-slate-400">{business.signerName}</span> • Max 70 parole
-                </p>
+
+                <textarea
+                  value={draftReplyText}
+                  onChange={(e) => setDraftReplyText(e.target.value)}
+                  rows={4}
+                  disabled={isGenerating}
+                  placeholder="Scrivi o genera una risposta..."
+                  className="input-field w-full text-xs leading-relaxed"
+                />
+                <div className="text-[11px] text-[#667069] text-right">
+                  Firmato: {business.signerName}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  onClick={handleDiscard}
+                  disabled={isSaving}
+                  className="btn-secondary px-3 py-1.5 text-xs text-[#B3382C] hover:bg-[#B3382C]/10"
+                >
+                  Scarta
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleGenerateDraft()}
+                    disabled={isGenerating || isSaving}
+                    className="btn-secondary px-3 py-1.5 text-xs"
+                  >
+                    Rigenera
+                  </button>
+                  <button
+                    onClick={handleApproveAndPublish}
+                    disabled={isSaving || !draftReplyText.trim()}
+                    className="btn-primary px-4 py-1.5 text-xs disabled:opacity-50"
+                  >
+                    Approva e pubblica
+                  </button>
+                </div>
               </div>
             </div>
-
-            <div className="p-6 border-t border-slate-800 flex items-center justify-between bg-slate-950/40">
-              <button
-                onClick={handleDiscard}
-                disabled={isSaving}
-                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-rose-500/20 text-slate-300 hover:text-rose-300 text-xs font-semibold transition flex items-center gap-1.5 border border-slate-700"
-              >
-                <Trash2 className="w-3.5 h-3.5" /> Scarta bozza
-              </button>
-
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setSelectedReview(null)}
-                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition"
-                >
-                  Annulla
-                </button>
-                <button
-                  onClick={handleApproveAndPublish}
-                  disabled={isSaving || !draftReplyText.trim()}
-                  className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition shadow-lg shadow-amber-500/20 flex items-center gap-2 disabled:opacity-50"
-                >
-                  <Send className="w-3.5 h-3.5" /> Approva e pubblica su Google
-                </button>
-              </div>
+          ) : (
+            <div className="p-12 text-center text-xs text-[#667069]">
+              Seleziona una recensione dalla lista a sinistra.
             </div>
-          </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 };

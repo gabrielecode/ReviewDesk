@@ -1,20 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  BarChart3, 
-  Star, 
-  MessageSquare, 
-  CheckCircle2, 
-  Clock, 
-  Sparkles, 
-  TrendingUp, 
-  ThumbsUp, 
-  AlertCircle,
-  RotateCcw
-} from 'lucide-react';
-import { 
   ResponsiveContainer, 
-  BarChart, 
-  Bar, 
+  LineChart, 
+  Line, 
   XAxis, 
   YAxis, 
   Tooltip, 
@@ -42,12 +30,12 @@ export const StatsTab: React.FC<StatsTabProps> = ({ business, reviews }) => {
   const avgResponseTime = '4.2 ore';
 
   const trendData = [
-    { mese: 'Maggio', recensioni: Math.max(2, Math.floor(totalReviews * 0.12)), media: 4.6 },
-    { mese: 'Giugno', recensioni: Math.max(3, Math.floor(totalReviews * 0.15)), media: 4.7 },
-    { mese: 'Luglio', recensioni: Math.max(4, Math.floor(totalReviews * 0.22)), media: 4.8 },
-    { mese: 'Agosto', recensioni: Math.max(5, Math.floor(totalReviews * 0.25)), media: 4.9 },
-    { mese: 'Settembre', recensioni: Math.max(3, Math.floor(totalReviews * 0.14)), media: 4.5 },
-    { mese: 'Ottobre', recensioni: Math.max(4, Math.floor(totalReviews * 0.12)), media: Number(avgStars) },
+    { mese: 'Mag', recensioni: Math.max(2, Math.floor(totalReviews * 0.12)), media: 4.6 },
+    { mese: 'Giu', recensioni: Math.max(3, Math.floor(totalReviews * 0.15)), media: 4.7 },
+    { mese: 'Lug', recensioni: Math.max(4, Math.floor(totalReviews * 0.22)), media: 4.8 },
+    { mese: 'Ago', recensioni: Math.max(5, Math.floor(totalReviews * 0.25)), media: 4.9 },
+    { mese: 'Set', recensioni: Math.max(3, Math.floor(totalReviews * 0.14)), media: 4.5 },
+    { mese: 'Ott', recensioni: Math.max(4, Math.floor(totalReviews * 0.12)), media: Number(avgStars) },
   ];
 
   const fetchInsights = async () => {
@@ -58,20 +46,17 @@ export const StatsTab: React.FC<StatsTabProps> = ({ business, reviews }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ business, reviews }),
       });
-      if (!res.ok) throw new Error('Errore generazione analisi');
+      if (!res.ok) throw new Error('Errore analisi');
       const data = await res.json();
       setInsights(data);
     } catch (err) {
-      console.error(err);
       setInsights({
         strengths: [
-          'Qualità eccellente del servizio e dei prodotti',
-          'Accoglienza e cordialità del personale',
-          'Attrattiva per turisti e clientela locale'
+          'Qualità costante del servizio e dei prodotti',
+          'Accoglienza e cordialità del personale'
         ],
         improvements: [
-          'Tempi di attesa nei giorni di maggiore affluenza',
-          'Gestione della disponibilità di parcheggio e posti'
+          'Tempi di attesa nei momenti di maggiore affluenza'
         ]
       });
     } finally {
@@ -84,140 +69,92 @@ export const StatsTab: React.FC<StatsTabProps> = ({ business, reviews }) => {
   }, [business.id]);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl">
-        <h2 className="text-xl font-bold text-white flex items-center gap-2">
-          <BarChart3 className="w-6 h-6 text-amber-400" />
-          Statistiche e Analisi IA
-        </h2>
-        <p className="text-sm text-slate-400 mt-1">
-          Panoramica delle performance di <span className="text-white font-medium">{business.name}</span> su Google Business Profile.
-        </p>
+    <div className="space-y-6 max-w-7xl mx-auto">
+      {/* Page Title */}
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold text-xl text-[#1C2321]">Statistiche e analisi</h2>
       </div>
 
-      {/* Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Media Stelle</span>
-            <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
-          </div>
+      {/* 4 Numbers in a Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="panel-card p-4 space-y-1">
+          <p className="text-xs text-[#667069] font-medium">Media stelle</p>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-black text-white">{avgStars}</span>
-            <span className="text-xs text-emerald-400 font-medium">su 5.0</span>
+            <span className="text-2xl font-semibold text-[#1C2321]">{avgStars}</span>
+            <span className="text-xs text-[#1F5F4A]">su 5.0</span>
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Totale Recensioni</span>
-            <MessageSquare className="w-5 h-5 text-amber-400" />
-          </div>
+        <div className="panel-card p-4 space-y-1">
+          <p className="text-xs text-[#667069] font-medium">Recensioni</p>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-black text-white">{totalReviews}</span>
-            <span className="text-xs text-slate-400 font-medium">recensioni</span>
+            <span className="text-2xl font-semibold text-[#1C2321]">{totalReviews}</span>
+            <span className="text-xs text-[#667069]">totali</span>
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">% Risposte</span>
-            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-          </div>
+        <div className="panel-card p-4 space-y-1">
+          <p className="text-xs text-[#667069] font-medium">Risposte</p>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-black text-white">{answeredPct}%</span>
-            <span className="text-xs text-emerald-400 font-medium">{answeredCount} su {totalReviews}</span>
+            <span className="text-2xl font-semibold text-[#1C2321]">{answeredPct}%</span>
+            <span className="text-xs text-[#1F5F4A]">{answeredCount} pubblicate</span>
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Tempo Medio Risposta</span>
-            <Clock className="w-5 h-5 text-amber-400" />
-          </div>
+        <div className="panel-card p-4 space-y-1">
+          <p className="text-xs text-[#667069] font-medium">Tempo medio risposta</p>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-black text-white">{avgResponseTime}</span>
-            <span className="text-xs text-amber-400 font-medium">medio</span>
+            <span className="text-2xl font-semibold text-[#1C2321]">{avgResponseTime}</span>
           </div>
         </div>
       </div>
 
-      {/* Chart & AI Insights */}
+      {/* Line Chart & Insights */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recharts Chart */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-bold text-white text-base flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-amber-400" />
-              Andamento Recensioni (Ultimi 6 Mesi)
-            </h3>
-          </div>
-
-          <div className="h-72 w-full pt-4">
+        {/* Single Line Chart with light grid and single color */}
+        <div className="panel-card p-5 space-y-4">
+          <h3 className="font-semibold text-xs text-[#1C2321] uppercase tracking-wide">Andamento recensioni (ultimi 6 mesi)</h3>
+          <div className="h-64 w-full pt-2">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.4} />
-                <XAxis dataKey="mese" stroke="#94a3b8" fontSize={12} />
-                <YAxis stroke="#94a3b8" fontSize={12} />
+              <LineChart data={trendData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7E3" opacity={0.6} />
+                <XAxis dataKey="mese" stroke="#667069" fontSize={11} />
+                <YAxis stroke="#667069" fontSize={11} />
                 <Tooltip 
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }}
+                  contentStyle={{ backgroundColor: '#FFFFFF', borderColor: '#E5E7E3', borderRadius: '6px', color: '#1C2321', fontSize: '12px' }}
                 />
-                <Bar dataKey="recensioni" fill="#f59e0b" radius={[6, 6, 0, 0]} name="Recensioni" />
-              </BarChart>
+                <Line type="monotone" dataKey="recensioni" stroke="#1F5F4A" strokeWidth={2} dot={{ r: 3, fill: '#1F5F4A' }} name="Recensioni" />
+              </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* "Cosa dicono i clienti" AI Insights Box */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5 flex flex-col justify-between">
+        {/* AI Insights Panel */}
+        <div className="panel-card p-5 space-y-4 flex flex-col justify-between">
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-white text-base flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-amber-400" />
-                Cosa dicono i clienti (Analisi IA)
-              </h3>
-              <button
-                onClick={fetchInsights}
-                disabled={loadingInsights}
-                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
-                title="Aggiorna analisi"
-              >
-                <RotateCcw className={`w-4 h-4 ${loadingInsights ? 'animate-spin' : ''}`} />
-              </button>
-            </div>
+            <h3 className="font-semibold text-xs text-[#1C2321] uppercase tracking-wide">Sintesi recensioni</h3>
 
             {loadingInsights || !insights ? (
-              <div className="py-12 text-center text-slate-400 text-sm">
-                Analisi recensioni in corso con Gemini...
-              </div>
+              <p className="text-xs text-[#667069] py-8 text-center">Analisi in corso...</p>
             ) : (
-              <div className="space-y-5">
-                {/* Strengths */}
+              <div className="space-y-4 text-xs">
                 <div className="space-y-2">
-                  <h4 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <ThumbsUp className="w-3.5 h-3.5" /> Punti di Forza principali
-                  </h4>
-                  <ul className="space-y-2">
+                  <p className="font-medium text-[#1F5F4A]">Punti di forza</p>
+                  <ul className="space-y-1.5">
                     {insights.strengths.map((item, idx) => (
-                      <li key={idx} className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 text-xs text-slate-200 flex items-start gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0"></span>
-                        <span>{item}</span>
+                      <li key={idx} className="bg-[#F6F7F5] p-2.5 rounded-[6px] border border-[#E5E7E3] text-[#1C2321]">
+                        {item}
                       </li>
                     ))}
                   </ul>
                 </div>
 
-                {/* Improvements */}
                 <div className="space-y-2">
-                  <h4 className="text-xs font-semibold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <AlertCircle className="w-3.5 h-3.5" /> Aree di Miglioramento
-                  </h4>
-                  <ul className="space-y-2">
+                  <p className="font-medium text-[#B3382C]">Aree di miglioramento</p>
+                  <ul className="space-y-1.5">
                     {insights.improvements.map((item, idx) => (
-                      <li key={idx} className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 text-xs text-slate-200 flex items-start gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-rose-400 mt-1.5 shrink-0"></span>
-                        <span>{item}</span>
+                      <li key={idx} className="bg-[#F6F7F5] p-2.5 rounded-[6px] border border-[#E5E7E3] text-[#1C2321]">
+                        {item}
                       </li>
                     ))}
                   </ul>
@@ -226,8 +163,8 @@ export const StatsTab: React.FC<StatsTabProps> = ({ business, reviews }) => {
             )}
           </div>
 
-          <p className="text-[11px] text-slate-500 pt-2 border-t border-slate-800">
-            Sintesi generata automaticamente da Google Gemini sulla base delle recensioni recenti.
+          <p className="text-[11px] text-[#667069] pt-3 border-t border-[#E5E7E3]">
+            Sintesi automatica basata sulle recensioni recenti.
           </p>
         </div>
       </div>

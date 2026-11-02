@@ -1,7 +1,5 @@
 import { Business, Review, RequestItem } from './types';
 
-// TODO: sostituire con Supabase
-
 export interface AppData {
   businesses: Business[];
   reviews: Review[];
@@ -14,7 +12,7 @@ export const initialData: AppData = {
       id: 'osteria-demo',
       name: 'Osteria Demo',
       category: 'Ristorante Tipico',
-      location: 'Lugano, Ticino',
+      location: 'Lugano',
       signerName: 'Chef Marco',
       tone: 'caloroso',
       defaultLanguage: 'it',
@@ -28,7 +26,7 @@ export const initialData: AppData = {
       id: 'salone-demo',
       name: 'Salone Demo',
       category: 'Parrucchiere & Stile',
-      location: 'Mendrisio, Ticino',
+      location: 'Mendrisio',
       signerName: 'Elena',
       tone: 'diretto',
       defaultLanguage: 'it',
@@ -41,8 +39,8 @@ export const initialData: AppData = {
     {
       id: 'studio-demo',
       name: 'Studio Demo',
-      category: 'Fisioterapia & Riabilitazione',
-      location: 'Bellinzona, Ticino',
+      category: 'Fisioterapia',
+      location: 'Bellinzona',
       signerName: 'Dr. Luca Bernasconi',
       tone: 'formale',
       defaultLanguage: 'it',
@@ -62,7 +60,8 @@ export const initialData: AppData = {
       text: 'Ottimo risotto ai funghi e brasato eccezionale! Personale molto accogliente e atmosfera tipica ticinese. Torneremo sicuramente.',
       date: '2026-10-28',
       status: 'pubblicata',
-      replyText: 'Caro Matteo, che piacere leggere le tue parole! Siamo davvero felici che il risotto ai funghi e il brasato siano stati di tuo gradimento. Ti aspettiamo presto all\'Osteria Demo! Un caro saluto, Chef Marco'
+      replyText: 'Caro Matteo, che piacere leggere le tue parole! Siamo davvero felici che il risotto ai funghi e il brasato siano stati di tuo gradimento. Ti aspettiamo presto all\'Osteria Demo! Un caro saluto, Chef Marco',
+      replyDate: '2026-10-29'
     },
     {
       id: 'ost-2',
@@ -91,7 +90,8 @@ export const initialData: AppData = {
       text: 'Meravigliosa osteria nel cuore del Ticino. Vino Merlot locale superbo e formaggi del alpeggio sublimi.',
       date: '2026-10-22',
       status: 'pubblicata',
-      replyText: 'Buongiorno Gianni, grazie di cuore per il magnifico commento! Il nostro Merlot locale e i formaggi d\'alpeggio sono il nostro orgoglio. A presto, Chef Marco'
+      replyText: 'Buongiorno Gianni, grazie di cuore per il magnifico commento! Il nostro Merlot locale e i formaggi d\'alpeggio sono il nostro orgoglio. A presto, Chef Marco',
+      replyDate: '2026-10-23'
     },
     {
       id: 'ost-5',
@@ -101,7 +101,8 @@ export const initialData: AppData = {
       text: 'Fantastic authentic Ticinese food! Cozy vibe by the lake area.',
       date: '2026-10-20',
       status: 'pubblicata',
-      replyText: 'Hello Sarah! Thank you for the wonderful review. We are delighted you loved our authentic food and cozy vibe. Warm regards, Chef Marco'
+      replyText: 'Hello Sarah! Thank you for the wonderful review. We are delighted you loved our authentic food and cozy vibe. Warm regards, Chef Marco',
+      replyDate: '2026-10-21'
     },
     {
       id: 'ost-6',
@@ -126,10 +127,11 @@ export const initialData: AppData = {
       businessId: 'osteria-demo',
       author: 'Roberto Crivelli',
       stars: 5,
-      text: '',
+      text: 'Ottima accoglienza e qualità costante.',
       date: '2026-10-12',
       status: 'pubblicata',
-      replyText: 'Grazie mille per le 5 stelle Roberto! A presto, Chef Marco'
+      replyText: 'Grazie mille per le 5 stelle Roberto! A presto, Chef Marco',
+      replyDate: '2026-10-13'
     },
     {
       id: 'ost-9',
@@ -148,7 +150,8 @@ export const initialData: AppData = {
       text: 'Un vero gioiello a Lugano! Gnocchi fatti in casa spettacolari.',
       date: '2026-10-05',
       status: 'pubblicata',
-      replyText: 'Cara Elena, che gioia leggere che i nostri gnocchi fatti in casa ti hanno conquistata! Ti aspettiamo per la prossima golosità. Un saluto, Chef Marco'
+      replyText: 'Cara Elena, che gioia leggere che i nostri gnocchi fatti in casa ti hanno conquistata! Ti aspettiamo per la prossima golosità. Un saluto, Chef Marco',
+      replyDate: '2026-10-06'
     },
     {
       id: 'ost-11',
@@ -158,7 +161,8 @@ export const initialData: AppData = {
       text: 'Sehr gutes Essen, freundliche Bedienung.',
       date: '2026-10-01',
       status: 'pubblicata',
-      replyText: 'Danke Markus! Wir freuen uns auf Ihren nächsten Besuch in Lugano. A presto, Chef Marco'
+      replyText: 'Danke Markus! Wir freuen uns auf Ihren nächsten Besuch in Lugano. A presto, Chef Marco',
+      replyDate: '2026-10-02'
     },
     {
       id: 'ost-12',
@@ -168,12 +172,13 @@ export const initialData: AppData = {
       text: 'Torta di pane fatta in casa da urlo! Ambiente familiare e cordiale.',
       date: '2026-09-28',
       status: 'pubblicata',
-      replyText: 'Grazie Silvia! La nostra torta di pane segue la ricetta tradizionale. Un abbraccio, Chef Marco'
+      replyText: 'Grazie Silvia! La nostra torta di pane segue la ricetta tradizionale. Un abbraccio, Chef Marco',
+      replyDate: '2026-09-29'
     },
     {
       id: 'ost-13',
       businessId: 'osteria-demo',
-      author: 'Davide G., Lugano',
+      author: 'Davide G.',
       stars: 5,
       text: 'Pranzo di lavoro eccellente. Servizio rapido e piatti genuini.',
       date: '2026-09-25',
@@ -187,7 +192,8 @@ export const initialData: AppData = {
       text: 'Gutes Lokal, gerne wieder.',
       date: '2026-09-20',
       status: 'pubblicata',
-      replyText: 'Danke Klaus! Bis zum nächsten Mal in Lugano. Chef Marco'
+      replyText: 'Danke Klaus! Bis zum nächsten Mal in Lugano. Chef Marco',
+      replyDate: '2026-09-21'
     },
     // Salone Demo
     {
@@ -198,7 +204,8 @@ export const initialData: AppData = {
       text: 'Elena ha capito esattamente il colore che volevo! Balayage perfetto e capelli morbidissimi.',
       date: '2026-10-27',
       status: 'pubblicata',
-      replyText: 'Grazie Martina! Sono felicissima che il balayage sia esattamente come lo desideravi. A presto nel mio salone a Mendrisio! Elena'
+      replyText: 'Grazie Martina! Sono felicissima che il balayage sia esattamente come lo desideravi. A presto nel mio salone a Mendrisio! Elena',
+      replyDate: '2026-10-28'
     },
     {
       id: 'sal-2',
@@ -227,7 +234,8 @@ export const initialData: AppData = {
       text: 'Ambiente rilassante, pulitissimo e prodotti eccezionali. Consigliatissimo!',
       date: '2026-10-18',
       status: 'pubblicata',
-      replyText: 'Grazie Beatrice! La cura dell\'ambiente e dei prodotti per i vostri capelli è la nostra priorità. A presto, Elena'
+      replyText: 'Grazie Beatrice! La cura dell\'ambiente e dei prodotti per i vostri capelli è la nostra priorità. A presto, Elena',
+      replyDate: '2026-10-19'
     },
     {
       id: 'sal-5',
@@ -243,10 +251,11 @@ export const initialData: AppData = {
       businessId: 'salone-demo',
       author: 'Sara G.',
       stars: 5,
-      text: '',
+      text: 'Servizio eccellente come sempre.',
       date: '2026-10-10',
       status: 'pubblicata',
-      replyText: 'Grazie Sara per le stelle! Un saluto, Elena'
+      replyText: 'Grazie Sara per le stelle! Un saluto, Elena',
+      replyDate: '2026-10-11'
     },
     {
       id: 'sal-7',
@@ -274,7 +283,8 @@ export const initialData: AppData = {
       text: 'Miglior salone a Mendrisio senza dubbio. Bravissima Elena!',
       date: '2026-09-29',
       status: 'pubblicata',
-      replyText: 'Grazie Francesca! Complimenti così mi danno una carica immensa. A presto! Elena'
+      replyText: 'Grazie Francesca! Complimenti così mi danno una carica immensa. A presto! Elena',
+      replyDate: '2026-09-30'
     },
     {
       id: 'sal-10',
@@ -284,7 +294,8 @@ export const initialData: AppData = {
       text: 'Top Service und wunderschöne Frisur!',
       date: '2026-09-24',
       status: 'pubblicata',
-      replyText: 'Vielen Dank Gaby! Es war mir eine Freude. Bis zum nächsten Mal in Mendrisio, Elena'
+      replyText: 'Vielen Dank Gaby! Es war mir eine Freude. Bis zum nächsten Mal in Mendrisio, Elena',
+      replyDate: '2026-09-25'
     },
     {
       id: 'sal-11',
@@ -313,7 +324,8 @@ export const initialData: AppData = {
       text: 'Il Dr. Bernasconi è un professionista eccezionale. Il mio mal di schiena cronico è quasi sparito grazie ai trattamenti mirati.',
       date: '2026-10-28',
       status: 'pubblicata',
-      replyText: 'Gentile Stefano, La ringraziamo molto per la Sua testimonianza. Sono lieto che i trattamenti abbiano alleviato il Suo mal di schiena. Cordiali saluti, Dr. Luca Bernasconi'
+      replyText: 'Gentile Stefano, La ringraziamo molto per la Sua testimonianza. Sono lieto che i trattamenti abbiano alleviato il Suo mal di schiena. Cordiali saluti, Dr. Luca Bernasconi',
+      replyDate: '2026-10-29'
     },
     {
       id: 'stu-2',
@@ -342,7 +354,8 @@ export const initialData: AppData = {
       text: 'Puntualità, competenza e grande empatia. Risolto problema alla spalla in poche sedute.',
       date: '2026-10-19',
       status: 'pubblicata',
-      replyText: 'Gentile Elena, La ringrazio cordialmente. Siamo felici di aver risolto il Suo problema alla spalla in modo tempestivo. Un caro saluto, Dr. Luca Bernasconi'
+      replyText: 'Gentile Elena, La ringrazio cordialmente. Siamo felici di aver risolto il Suo problema alla spalla in modo tempestivo. Un caro saluto, Dr. Luca Bernasconi',
+      replyDate: '2026-10-20'
     },
     {
       id: 'stu-5',
@@ -358,10 +371,11 @@ export const initialData: AppData = {
       businessId: 'studio-demo',
       author: 'Roberto F.',
       stars: 5,
-      text: '',
+      text: 'Centro altamente professionale.',
       date: '2026-10-11',
       status: 'pubblicata',
-      replyText: 'Grazie per la valutazione positiva. Cordiali saluti, Dr. Luca Bernasconi'
+      replyText: 'Grazie per la valutazione positiva. Cordiali saluti, Dr. Luca Bernasconi',
+      replyDate: '2026-10-12'
     },
     {
       id: 'stu-7',
@@ -380,7 +394,8 @@ export const initialData: AppData = {
       text: 'Massima pulizia e protocolli igienici impeccabili. Bravi.',
       date: '2026-10-03',
       status: 'pubblicata',
-      replyText: 'Gentile Claudio, La ringraziamo per aver sottolineato l\'accuratezza dei nostri standard igienici. Cordiali saluti, Dr. Luca Bernasconi'
+      replyText: 'Gentile Claudio, La ringraziamo per aver sottolineato l\'accuratezza dei nostri standard igienici. Cordiali saluti, Dr. Luca Bernasconi',
+      replyDate: '2026-10-04'
     },
     {
       id: 'stu-9',
@@ -390,7 +405,8 @@ export const initialData: AppData = {
       text: 'Ausgezeichnete Behandlung und sehr freundliches Team in Bellinzona.',
       date: '2026-09-29',
       status: 'pubblicata',
-      replyText: 'Herzlichen Dank Sabine! Es freut uns sehr, dass Ihnen unsere Behandlung in Bellinzona geholfen hat. Dr. Luca Bernasconi'
+      replyText: 'Herzlichen Dank Sabine! Es freut uns sehr, dass Ihnen unsere Behandlung in Bellinzona geholfen hat. Dr. Luca Bernasconi',
+      replyDate: '2026-09-30'
     },
     {
       id: 'stu-10',
@@ -418,7 +434,8 @@ export const initialData: AppData = {
       text: 'Eccellente professionalità per riabilitazione post-traumatica.',
       date: '2026-09-15',
       status: 'pubblicata',
-      replyText: 'Gentile Giorgio, La ringrazio per la fiducia accordataci. Cordiali saluti, Dr. Luca Bernasconi'
+      replyText: 'Gentile Giorgio, La ringrazio per la fiducia accordataci. Cordiali saluti, Dr. Luca Bernasconi',
+      replyDate: '2026-09-16'
     }
   ],
   requests: [

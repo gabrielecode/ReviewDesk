@@ -1,7 +1,6 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { GoogleGenAI } from '@google/genai';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,16 +9,6 @@ const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
-
-// Initialize Google GenAI client
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    },
-  },
-});
 
 // Simple in-memory IP rate limiter (e.g. 20 requests per minute per IP)
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -42,12 +31,12 @@ function rateLimiter(req: express.Request, res: express.Response, next: express.
   next();
 }
 
-// Timeout helper for Gemini calls (25 seconds)
+// Timeout helper for OpenRouter calls (25 seconds)
 async function withTimeout<T>(promise: Promise<T>, timeoutMs = 25000): Promise<T> {
   let timeoutHandle: NodeJS.Timeout;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeoutHandle = setTimeout(() => {
-      reject(new Error('Tempo scaduto durante la generazione con Gemini (timeout 25s).'));
+      reject(new Error('Tempo scaduto durante la chiamata a OpenRouter (timeout 25s).'));
     }, timeoutMs);
   });
 
@@ -63,18 +52,18 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs = 25000): Promise<T
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  const geminiConfigured = !!process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== '';
+  const openRouterConfigured = !!process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.trim() !== '';
   res.json({
     ok: true,
-    geminiConfigured,
+    openRouterConfigured,
   });
 });
 
-// Gemini draft reply endpoint
+// OpenRouter draft reply endpoint
 app.post('/api/draft-reply', rateLimiter, async (req, res) => {
   try {
-    if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY.trim() === '') {
-      return res.status(500).json({ error: 'Chiave Gemini non configurata sul server' });
+    if (!process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY.trim() === '') {
+      return res.status(500).json({ error: 'Chiave OpenRouter non configurata sul server' });
     }
 
     const { reviewText, author, stars, businessSettings } = req.body;
@@ -87,7 +76,7 @@ app.post('/api/draft-reply', rateLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Testo della recensione troppo lungo (max 5000 caratteri)' });
     }
 
-    const prompt = `Sei l'assistente virtuale di "${businessSettings.name}" (${businessSettings.category}, a ${businessSettings.location}).
+    const systemPrompt = `Sei l'assistente virtuale di "${businessSettings.name}" (${businessSettings.category}, a ${businessSettings.location}).
 Devi scrivere una bozza di risposta professionale per una recensione Google lasciata da ${author || 'Cliente'} (${stars || 5} stelle).
 Testo della recensione: "${reviewText || '(Nessun testo, solo votazione a stelle)'}".
 
@@ -104,26 +93,44 @@ Regole tassative:
 10. Restituisci SOLO il testo della risposta pronto per essere pubblicato, senza virgolette iniziali o finali e senza commenti extra.`;
 
     const response = await withTimeout(
-      ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
+      fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'HTTP-Referer': 'https://reviewdesk.app',
+          'X-Title': 'ReviewDesk',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'openai/gpt-4o-mini',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: 'Genera la bozza di risposta secondo le regole.' }
+          ]
+        })
       })
     );
 
-    const draft = response.text?.trim() || `Gentile ${author || 'Cliente'}, la ringraziamo per il Suo feedback. Cordiali saluti, ${businessSettings.signerName || 'Staff'}`;
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`OpenRouter API error: ${response.status} ${errText}`);
+    }
+
+    const data = await response.json();
+    const draft = data.choices?.[0]?.message?.content?.trim() || `Gentile ${author || 'Cliente'}, la ringraziamo per il Suo feedback. Cordiali saluti, ${businessSettings.signerName || 'Staff'}`;
 
     res.json({ draft });
   } catch (error: any) {
-    console.error('Gemini draft error:', error);
-    res.status(500).json({ error: error.message || 'Errore durante la generazione della bozza con Gemini' });
+    console.error('OpenRouter draft error:', error);
+    res.status(500).json({ error: error.message || 'Errore durante la generazione della bozza con OpenRouter' });
   }
 });
 
-// Gemini insights endpoint
+// OpenRouter insights endpoint
 app.post('/api/insights', rateLimiter, async (req, res) => {
   try {
-    if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY.trim() === '') {
-      return res.status(500).json({ error: 'Chiave Gemini non configurata sul server' });
+    if (!process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY.trim() === '') {
+      return res.status(500).json({ error: 'Chiave OpenRouter non configurata sul server' });
     }
 
     const { business, reviews } = req.body;
@@ -133,7 +140,7 @@ app.post('/api/insights', rateLimiter, async (req, res) => {
 
     const reviewsSummary = reviews.map((r: any) => `[${r.stars} stelle] ${r.text || 'Solo stelle'}`).join('\n');
 
-    const prompt = `Analizza le seguenti recensioni Google per l'attività "${business.name}" (${business.category}):
+    const systemPrompt = `Analizza le seguenti recensioni Google per l'attività "${business.name}" (${business.category}):
 ${reviewsSummary}
 
 Restituisci un oggetto JSON con questa esatta struttura:
@@ -144,17 +151,33 @@ Restituisci un oggetto JSON con questa esatta struttura:
 Scrivi in italiano chiaro e sintetico.`;
 
     const response = await withTimeout(
-      ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json'
-        }
+      fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'HTTP-Referer': 'https://reviewdesk.app',
+          'X-Title': 'ReviewDesk',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'openai/gpt-4o-mini',
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: 'Restituisci l\'analisi JSON richiesta.' }
+          ]
+        })
       })
     );
 
-    const jsonText = response.text || '{"strengths": [], "improvements": []}';
-    const insights = JSON.parse(jsonText);
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`OpenRouter API error: ${response.status} ${errText}`);
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content || '{"strengths": [], "improvements": []}';
+    const insights = JSON.parse(content);
     res.json(insights);
   } catch (error: any) {
     console.error('Insights error:', error);
