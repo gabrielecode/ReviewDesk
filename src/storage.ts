@@ -20,7 +20,14 @@ export const initialDemoBusinesses: Business[] = [
     privateContact: 'osteria@demo.ch / +41 91 923 45 67',
     googleUrl: 'https://g.page/r/osteria-demo-lugano/review',
     isConnected: true,
-    smsTemplate: 'Ciao {nome}! Grazie per essere stato all\'Osteria Demo a Lugano. Ti è piaciuta la nostra cucina ticinese? Lasciaci una recensione qui: {link}'
+    smsTemplate: 'Ciao {nome}! Grazie per essere stato all\'Osteria Demo a Lugano. Ti è piaciuta la nostra cucina ticinese? Lasciaci una recensione qui: {link}',
+    googlePlaceId: 'ChIJ_x5z8R3a1EcR95-xX8aL1mY',
+    googleAccountId: 'accounts/104928374920182736451',
+    googleLocationId: 'locations/98765432109876543210',
+    googleApiKey: '',
+    syncFrequency: 'daily',
+    autoSyncReviews: true,
+    lastSyncAt: new Date().toISOString()
   },
   {
     id: 'salone-demo-' + Math.random().toString(36).substring(2, 9),
@@ -34,7 +41,14 @@ export const initialDemoBusinesses: Business[] = [
     privateContact: 'info@salonedemo.ch / +41 91 646 12 34',
     googleUrl: 'https://g.page/r/salone-demo-mendrisio/review',
     isConnected: false,
-    smsTemplate: 'Buongiorno {nome}, grazie per la visita al Salone Demo di Mendrisio! Come ti trovi con il nuovo taglio? Raccontacelo su Google: {link}'
+    smsTemplate: 'Buongiorno {nome}, grazie per la visita al Salone Demo di Mendrisio! Come ti trovi con il nuovo taglio? Raccontacelo su Google: {link}',
+    googlePlaceId: 'ChIJa1b2c3d4e5f6g7h8i9j0k1l',
+    googleAccountId: 'accounts/104928374920182736452',
+    googleLocationId: 'locations/98765432109876543211',
+    googleApiKey: '',
+    syncFrequency: 'daily',
+    autoSyncReviews: true,
+    lastSyncAt: ''
   },
   {
     id: 'studio-demo-' + Math.random().toString(36).substring(2, 9),
@@ -48,7 +62,14 @@ export const initialDemoBusinesses: Business[] = [
     privateContact: 'studio@demo.ch / +41 91 825 78 90',
     googleUrl: 'https://g.page/r/studio-demo-bellinzona/review',
     isConnected: true,
-    smsTemplate: 'Gentile {nome}, la ringraziamo per essersi affidato allo Studio Demo di Bellinzona. La Sua opinione è preziosa per il nostro centro: {link}'
+    smsTemplate: 'Gentile {nome}, la ringraziamo per essersi affidato allo Studio Demo di Bellinzona. La Sua opinione è preziosa per il nostro centro: {link}',
+    googlePlaceId: 'ChIJz8y9x0w1v2u3t4s5r6q7p8o',
+    googleAccountId: 'accounts/104928374920182736453',
+    googleLocationId: 'locations/98765432109876543212',
+    googleApiKey: '',
+    syncFrequency: 'daily',
+    autoSyncReviews: true,
+    lastSyncAt: new Date().toISOString()
   }
 ];
 
@@ -151,7 +172,14 @@ export function mapBusinessFromDb(row: any): Business {
     privateContact: row.private_contact || row.privateContact || '',
     googleUrl: row.google_url || row.googleUrl || '',
     isConnected: row.is_connected ?? row.isConnected ?? false,
-    smsTemplate: row.sms_template || row.smsTemplate || ''
+    smsTemplate: row.sms_template || row.smsTemplate || '',
+    googlePlaceId: row.google_place_id || row.googlePlaceId || '',
+    googleAccountId: row.google_account_id || row.googleAccountId || '',
+    googleLocationId: row.google_location_id || row.googleLocationId || '',
+    googleApiKey: row.google_api_key || row.googleApiKey || '',
+    syncFrequency: row.sync_frequency || row.syncFrequency || 'daily',
+    autoSyncReviews: row.auto_sync_reviews ?? row.autoSyncReviews ?? true,
+    lastSyncAt: row.last_sync_at || row.lastSyncAt || ''
   };
 }
 
@@ -169,7 +197,14 @@ export function mapBusinessToDb(b: Business, userId: string) {
     private_contact: b.privateContact,
     google_url: b.googleUrl,
     is_connected: b.isConnected,
-    sms_template: b.smsTemplate
+    sms_template: b.smsTemplate,
+    google_place_id: b.googlePlaceId || null,
+    google_account_id: b.googleAccountId || null,
+    google_location_id: b.googleLocationId || null,
+    google_api_key: b.googleApiKey || null,
+    sync_frequency: b.syncFrequency || 'daily',
+    auto_sync_reviews: b.autoSyncReviews ?? true,
+    last_sync_at: b.lastSyncAt || null
   };
 }
 
@@ -360,7 +395,14 @@ export async function createBusinessInDb(userId: string, bData: Partial<Business
     privateContact: bData.privateContact || '',
     googleUrl: bData.googleUrl || 'https://g.page/review',
     isConnected: false,
-    smsTemplate: bData.smsTemplate || 'Buongiorno {nome}, grazie per averci scelto! Lasciaci una recensione qui: {link}'
+    smsTemplate: bData.smsTemplate || 'Buongiorno {nome}, grazie per averci scelto! Lasciaci una recensione qui: {link}',
+    googlePlaceId: bData.googlePlaceId || '',
+    googleAccountId: bData.googleAccountId || '',
+    googleLocationId: bData.googleLocationId || '',
+    googleApiKey: bData.googleApiKey || '',
+    syncFrequency: bData.syncFrequency || 'daily',
+    autoSyncReviews: bData.autoSyncReviews ?? true,
+    lastSyncAt: ''
   };
 
   try {

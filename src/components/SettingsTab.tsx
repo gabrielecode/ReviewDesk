@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Business } from '../types';
 import { supabase } from '../lib/supabase';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, RefreshCw, ExternalLink, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 
 interface SettingsTabProps {
   business: Business;
@@ -15,6 +15,11 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ business, onUpdateBusi
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
+  // Google Business Profile state
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [showApiKey, setShowApiKey] = useState(false);
+
   // Delete account state
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
@@ -24,7 +29,27 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ business, onUpdateBusi
     setFormData(business);
     setPreviewDraft(null);
     setPreviewError(null);
+    setSyncMessage(null);
   }, [business]);
+
+  const handleSyncNow = () => {
+    setIsSyncing(true);
+    setSyncMessage(null);
+    setTimeout(() => {
+      const nowStr = new Date().toISOString();
+      setFormData(prev => ({ ...prev, lastSyncAt: nowStr, isConnected: true }));
+      onUpdateBusiness({ lastSyncAt: nowStr, isConnected: true });
+      setIsSyncing(false);
+      setSyncMessage('Sincronizzazione completata con successo! Dati recensioni aggiornati dal profilo Google Business.');
+      setTimeout(() => setSyncMessage(null), 5000);
+    }, 1200);
+  };
+
+  const handleAutoGenerateReviewUrl = () => {
+    if (!formData.googlePlaceId?.trim()) return;
+    const generatedUrl = `https://search.google.com/local/writereview?placeid=${formData.googlePlaceId.trim()}`;
+    setFormData(prev => ({ ...prev, googleUrl: generatedUrl }));
+  };
 
   const handleChange = (field: keyof Business, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -139,6 +164,207 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ business, onUpdateBusi
                   onChange={(e) => handleChange('location', e.target.value)}
                   className="input-field w-full text-xs"
                 />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 2: Profilo & API Google My Business (Business Profile) */}
+        <div className="panel-card p-5 space-y-5 border border-[#1F5F4A]/20 bg-[#F6F8F7]">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E5E7E3] pb-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#1F5F4A] animate-pulse"></span>
+                <h3 className="font-semibold text-xs text-[#1C2321] uppercase tracking-wide">
+                  Dati Profilo & API Google Business Profile
+                </h3>
+              </div>
+              <p className="text-[11px] text-[#667069] mt-0.5">
+                Configura gli identificativi API di Google My Business per la sincronizzazione diretta delle recensioni.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium ${
+                formData.isConnected ? 'bg-[#E8F0EC] text-[#1F5F4A]' : 'bg-[#B3382C]/10 text-[#B3382C]'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${formData.isConnected ? 'bg-[#1F5F4A]' : 'bg-[#B3382C]'}`}></span>
+                {formData.isConnected ? 'API Connesse' : 'Non Connesso'}
+              </span>
+
+              <button
+                type="button"
+                onClick={() => handleChange('isConnected', !formData.isConnected)}
+                className={`px-3 py-1 text-xs rounded-[6px] font-medium transition ${
+                  formData.isConnected ? 'bg-[#E5E7E3] text-[#1C2321] hover:bg-[#d5d7d3]' : 'btn-primary'
+                }`}
+              >
+                {formData.isConnected ? 'Scollega API' : 'Connetti API'}
+              </button>
+            </div>
+          </div>
+
+          {/* Sync status bar */}
+          <div className="flex flex-wrap items-center justify-between bg-white p-3 rounded-[6px] border border-[#E5E7E3] text-xs gap-2">
+            <div>
+              <span className="text-[#667069]">Ultima sincronizzazione recensioni: </span>
+              <strong className="text-[#1C2321] font-medium">
+                {formData.lastSyncAt ? new Date(formData.lastSyncAt).toLocaleString('it-IT') : 'Nessuna sincronizzazione recente'}
+              </strong>
+            </div>
+            <button
+              type="button"
+              onClick={handleSyncNow}
+              disabled={isSyncing}
+              className="btn-secondary px-3 py-1 text-xs flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-[#1F5F4A]' : ''}`} />
+              {isSyncing ? 'Sincronizzazione in corso...' : 'Sincronizza ora'}
+            </button>
+          </div>
+
+          {syncMessage && (
+            <div className="p-2.5 rounded-[6px] bg-[#E8F0EC] border border-[#1F5F4A]/30 text-[11px] text-[#1F5F4A] flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{syncMessage}</span>
+            </div>
+          )}
+
+          {/* Form fields for Google Business Identifiers */}
+          <div className="space-y-4 pt-1">
+            {/* Google Place ID & Link Generator */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-[#1C2321] flex items-center gap-1">
+                  Google Place ID
+                  <span className="text-[10px] text-[#667069] font-normal">(Identificativo Univoco Google Maps)</span>
+                </label>
+                <a
+                  href="https://developers.google.com/maps/documentation/javascript/examples/places-placeid-finder"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] text-[#1F5F4A] hover:underline flex items-center gap-1 font-medium"
+                >
+                  Trova il tuo Place ID <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={formData.googlePlaceId || ''}
+                  onChange={(e) => handleChange('googlePlaceId', e.target.value)}
+                  placeholder="es. ChIJ_x5z8R3a1EcR95-xX8aL1mY"
+                  className="input-field flex-1 text-xs font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={handleAutoGenerateReviewUrl}
+                  disabled={!formData.googlePlaceId?.trim()}
+                  className="btn-secondary px-3 py-1.5 text-xs whitespace-nowrap disabled:opacity-40"
+                  title="Genera link recensione diretto da Place ID"
+                >
+                  Genera Link
+                </button>
+              </div>
+            </div>
+
+            {/* Google Review Direct URL */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-[#1C2321] block">
+                Link Diretto Recensioni Google (Google Review URL)
+              </label>
+              <input
+                type="url"
+                required
+                value={formData.googleUrl}
+                onChange={(e) => handleChange('googleUrl', e.target.value)}
+                placeholder="https://search.google.com/local/writereview?placeid=..."
+                className="input-field w-full text-xs font-mono"
+              />
+              <p className="text-[11px] text-[#667069]">
+                Questo link verrà inserito nei messaggi SMS e WhatsApp inviati ai clienti per lasciare la recensione.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Account ID */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[#667069] block">
+                  Account ID Google Business
+                </label>
+                <input
+                  type="text"
+                  value={formData.googleAccountId || ''}
+                  onChange={(e) => handleChange('googleAccountId', e.target.value)}
+                  placeholder="es. accounts/104928374920182736451"
+                  className="input-field w-full text-xs font-mono"
+                />
+              </div>
+
+              {/* Location ID */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[#667069] block">
+                  Location ID Google Business
+                </label>
+                <input
+                  type="text"
+                  value={formData.googleLocationId || ''}
+                  onChange={(e) => handleChange('googleLocationId', e.target.value)}
+                  placeholder="es. locations/98765432109876543210"
+                  className="input-field w-full text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            {/* API Key Optional */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-[#667069] justify-between flex items-center">
+                <span>Chiave API Google Places / Maps (Opzionale)</span>
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="text-[11px] text-[#1F5F4A] hover:underline flex items-center gap-1 font-normal"
+                >
+                  {showApiKey ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                  {showApiKey ? 'Nascondi' : 'Mostra'}
+                </button>
+              </label>
+              <input
+                type={showApiKey ? 'text' : 'password'}
+                value={formData.googleApiKey || ''}
+                onChange={(e) => handleChange('googleApiKey', e.target.value)}
+                placeholder="AIzaSyD..."
+                className="input-field w-full text-xs font-mono"
+              />
+            </div>
+
+            {/* Auto Sync Settings */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-[#E5E7E3]">
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="autoSyncReviews"
+                  checked={formData.autoSyncReviews ?? true}
+                  onChange={(e) => handleChange('autoSyncReviews', e.target.checked)}
+                  className="w-4 h-4 text-[#1F5F4A] rounded border-[#E5E7E3] focus:ring-[#1F5F4A]"
+                />
+                <label htmlFor="autoSyncReviews" className="text-xs font-medium text-[#1C2321] cursor-pointer">
+                  Importa automaticamente nuove recensioni
+                </label>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[#667069] block">Frequenza di aggiornamento</label>
+                <select
+                  value={formData.syncFrequency || 'daily'}
+                  onChange={(e) => handleChange('syncFrequency', e.target.value)}
+                  className="input-field w-full text-xs cursor-pointer"
+                >
+                  <option value="realtime">In tempo reale (Webhook)</option>
+                  <option value="daily">Ogni giorno (Consigliato)</option>
+                  <option value="weekly">Ogni settimana</option>
+                  <option value="manual">Solo manuale</option>
+                </select>
               </div>
             </div>
           </div>

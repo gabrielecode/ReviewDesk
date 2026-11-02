@@ -11,6 +11,13 @@ export interface Business {
   googleUrl: string;
   isConnected: boolean;
   smsTemplate: string;
+  googlePlaceId?: string;
+  googleAccountId?: string;
+  googleLocationId?: string;
+  googleApiKey?: string;
+  syncFrequency?: 'realtime' | 'daily' | 'weekly' | 'manual';
+  autoSyncReviews?: boolean;
+  lastSyncAt?: string;
 }
 
 export interface Review {

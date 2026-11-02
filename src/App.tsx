@@ -444,6 +444,10 @@ export default function App() {
         onClose={() => setIsConnectionModalOpen(false)}
         business={currentBusiness}
         onUpdateBusiness={handleUpdateBusiness}
+        onNavigateToSettings={() => {
+          setIsConnectionModalOpen(false);
+          setActiveTab('settings');
+        }}
       />
 
       {/* Add Business Modal */}

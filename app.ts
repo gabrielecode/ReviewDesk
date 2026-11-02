@@ -603,18 +603,20 @@ app.post('/api/admin/create-user', requireAuth, async (req, res) => {
 
     if (businessName) {
       const newBizId = 'biz-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
-      await supabaseAdmin.from('businesses').insert({
-        id: newBizId,
-        user_id: userId,
-        name: businessName,
-        category: businessCategory || 'Attività',
-        location: businessLocation || 'Ticino',
-        signer_name: 'Direzione',
-        tone: 'caloroso',
-        default_language: 'it',
-        is_connected: false,
-        sms_template: `Buongiorno {nome}, grazie per averci scelto a ${businessLocation || 'Ticino'}! Lasciaci una recensione su Google: {link}`
-      }).catch(() => {});
+      try {
+        await supabaseAdmin.from('businesses').insert({
+          id: newBizId,
+          user_id: userId,
+          name: businessName,
+          category: businessCategory || 'Attività',
+          location: businessLocation || 'Ticino',
+          signer_name: 'Direzione',
+          tone: 'caloroso',
+          default_language: 'it',
+          is_connected: false,
+          sms_template: `Buongiorno {nome}, grazie per averci scelto a ${businessLocation || 'Ticino'}! Lasciaci una recensione su Google: {link}`
+        });
+      } catch {}
     }
 
     const matchingReq = pilotRequestsFallback.find(r => r.email.toLowerCase() === email.toLowerCase());
@@ -668,18 +670,20 @@ app.post('/api/setup-admin', async (req, res) => {
     const userId = createdUser?.id || 'usr_admin_sititicino';
 
     const bizId = 'biz-admin-' + userId;
-    await supabaseAdmin.from('businesses').upsert({
-      id: bizId,
-      user_id: userId,
-      name: 'Connect and create',
-      category: 'Consulenza e Siti Web',
-      location: 'Morbiolo Inferiore / Lugano',
-      signer_name: 'Gabriele Sestito',
-      tone: 'caloroso',
-      default_language: 'it',
-      is_connected: true,
-      sms_template: 'Buongiorno {nome}, grazie per la collaborazione con Connect and create! Lasciaci una recensione su Google: {link}'
-    }).catch(() => {});
+    try {
+      await supabaseAdmin.from('businesses').upsert({
+        id: bizId,
+        user_id: userId,
+        name: 'Connect and create',
+        category: 'Consulenza e Siti Web',
+        location: 'Morbiolo Inferiore / Lugano',
+        signer_name: 'Gabriele Sestito',
+        tone: 'caloroso',
+        default_language: 'it',
+        is_connected: true,
+        sms_template: 'Buongiorno {nome}, grazie per la collaborazione con Connect and create! Lasciaci una recensione su Google: {link}'
+      });
+    } catch {}
 
     res.json({
       success: true,
