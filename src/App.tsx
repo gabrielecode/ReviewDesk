@@ -93,6 +93,7 @@ export default function App() {
         <div className="flex-1 p-6 md:p-8 max-w-7xl w-full mx-auto space-y-6">
           {activeTab === 'reviews' && currentBusiness && (
             <ReviewsTab
+              key={currentBusiness.id}
               business={currentBusiness}
               reviews={currentReviews}
               onRefreshReviews={handleRefreshReviews}
@@ -101,6 +102,7 @@ export default function App() {
 
           {activeTab === 'requests' && currentBusiness && (
             <RequestsTab
+              key={currentBusiness.id}
               business={currentBusiness}
               requests={currentRequests}
               onRefreshRequests={handleRefreshRequests}
@@ -110,6 +112,7 @@ export default function App() {
 
           {activeTab === 'stats' && currentBusiness && (
             <StatsTab
+              key={currentBusiness.id}
               business={currentBusiness}
               reviews={currentReviews}
             />
@@ -117,6 +120,7 @@ export default function App() {
 
           {activeTab === 'settings' && currentBusiness && (
             <SettingsTab
+              key={currentBusiness.id}
               business={currentBusiness}
               onUpdateBusiness={handleUpdateBusiness}
             />

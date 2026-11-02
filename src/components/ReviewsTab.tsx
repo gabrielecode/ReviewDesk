@@ -25,8 +25,11 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
   const [draftReplyText, setDraftReplyText] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [generatingReviewId, setGeneratingReviewId] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+
+  const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 768;
 
   // Filter reviews
   const filteredReviews = reviews.filter((r) => {
@@ -43,7 +46,7 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
 
   // Default selection on desktop if none selected
   useEffect(() => {
-    if (filteredReviews.length > 0 && (!selectedReviewId || !filteredReviews.some(r => r.id === selectedReviewId))) {
+    if (isDesktop && filteredReviews.length > 0 && (!selectedReviewId || !filteredReviews.some(r => r.id === selectedReviewId))) {
       setSelectedReviewId(filteredReviews[0].id);
     } else if (filteredReviews.length === 0) {
       setSelectedReviewId(null);
@@ -55,7 +58,9 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
   // Sync draft text when selected review changes
   useEffect(() => {
     if (selectedReview) {
-      if (selectedReview.replyText) {
+      if (selectedReview.draftText !== undefined) {
+        setDraftReplyText(selectedReview.draftText);
+      } else if (selectedReview.replyText) {
         setDraftReplyText(selectedReview.replyText);
       } else {
         setDraftReplyText('');
@@ -64,11 +69,21 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
     }
   }, [selectedReviewId]);
 
+  const handleTextChange = (val: string) => {
+    setDraftReplyText(val);
+    if (selectedReviewId) {
+      const appData = getAppData();
+      const updatedReviews: Review[] = appData.reviews.map(r => r.id === selectedReviewId ? { ...r, draftText: val } : r);
+      saveAppData({ ...appData, reviews: updatedReviews });
+    }
+  };
+
   const handleGenerateDraft = async (rev?: Review) => {
     const target = rev || selectedReview;
     if (!target) return;
 
     setIsGenerating(true);
+    setGeneratingReviewId(target.id);
     setGenerationError(null);
 
     try {
@@ -89,29 +104,51 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
         throw new Error(errData.error || 'Errore di generazione risposta');
       }
       const data = await res.json();
-      setDraftReplyText(data.draft);
+      const newDraft = data.draft;
 
       const appData = getAppData();
-      const updatedReviews = appData.reviews.map(r => r.id === target.id ? { ...r, replyText: data.draft, status: 'bozza_pronta' as const } : r);
+      const updatedReviews: Review[] = appData.reviews.map(r => {
+        if (r.id === target.id) {
+          return { 
+            ...r, 
+            draftText: newDraft, 
+            status: (r.status === 'pubblicata' ? 'pubblicata' : 'bozza_pronta') as Review['status']
+          };
+        }
+        return r;
+      });
       saveAppData({ ...appData, reviews: updatedReviews });
       onRefreshReviews();
+
+      // If user is still viewing this review, update textarea
+      if (selectedReviewId === target.id) {
+        setDraftReplyText(newDraft);
+      }
     } catch (err: any) {
       console.error(err);
       setGenerationError(err.message || 'Impossibile generare la bozza.');
     } finally {
       setIsGenerating(false);
+      setGeneratingReviewId(null);
     }
   };
 
   const handleApproveAndPublish = async () => {
     if (!selectedReview) return;
+
+    if (selectedReview.stars <= 2) {
+      const confirmed = window.confirm('Attenzione: questa è una recensione da 1-2 stelle. Confermi di voler pubblicare la risposta?');
+      if (!confirmed) return;
+    }
+
     setIsSaving(true);
     try {
       const today = new Date().toISOString().split('T')[0];
       const appData = getAppData();
-      const updatedReviews = appData.reviews.map(r => r.id === selectedReview.id ? { 
+      const updatedReviews: Review[] = appData.reviews.map(r => r.id === selectedReview.id ? { 
         ...r, 
         replyText: draftReplyText, 
+        draftText: undefined,
         status: 'pubblicata' as const,
         replyDate: today
       } : r);
@@ -124,16 +161,33 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
     }
   };
 
-  const handleDiscard = async () => {
+  const handleDiscardOrCancel = async () => {
     if (!selectedReview) return;
     setIsSaving(true);
     try {
       const appData = getAppData();
-      const updatedReviews = appData.reviews.map(r => r.id === selectedReview.id ? { ...r, replyText: undefined, replyDate: undefined, status: 'da_rispondere' as const } : r);
+      const isPublished = selectedReview.status === 'pubblicata' || !!selectedReview.replyText;
+
+      const updatedReviews: Review[] = appData.reviews.map(r => {
+        if (r.id === selectedReview.id) {
+          if (isPublished) {
+            return { ...r, draftText: undefined, status: r.status };
+          } else {
+            return { ...r, draftText: undefined, replyText: undefined, replyDate: undefined, status: 'da_rispondere' as const };
+          }
+        }
+        return r;
+      });
+
       saveAppData({ ...appData, reviews: updatedReviews });
+      if (isPublished) {
+        setDraftReplyText(selectedReview.replyText || '');
+      } else {
+        setDraftReplyText('');
+      }
       onRefreshReviews();
     } catch (err) {
-      alert('Errore durante lo scarto.');
+      alert('Errore durante l\'operazione.');
     } finally {
       setIsSaving(false);
     }
@@ -144,7 +198,7 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
   const daRispondereCount = reviews.filter(r => r.status === 'da_rispondere').length;
   const bozzaProntaCount = reviews.filter(r => r.status === 'bozza_pronta').length;
   const avgStarsVal = totalReviewsCount > 0 ? (reviews.reduce((acc, r) => acc + r.stars, 0) / totalReviewsCount).toFixed(1) : '0.0';
-  const answeredCountVal = reviews.filter(r => r.status === 'pubblicata' || r.replyText).length;
+  const answeredCountVal = reviews.filter(r => r.status === 'pubblicata').length;
   const answeredPctVal = totalReviewsCount > 0 ? Math.round((answeredCountVal / totalReviewsCount) * 100) : 0;
 
   const renderStatusIndicator = (status: Review['status']) => {
@@ -229,7 +283,7 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
       {/* Two-Panel Layout */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
         {/* Left List Panel */}
-        <div className={`md:col-span-5 panel-card overflow-hidden ${selectedReviewId && 'hidden md:block'}`}>
+        <div className={`md:col-span-5 panel-card overflow-hidden ${selectedReviewId ? 'hidden md:block' : 'block'}`}>
           <div className="divide-y divide-[#E5E7E3] max-h-[calc(100vh-240px)] overflow-y-auto">
             {filteredReviews.length === 0 ? (
               <div className="p-8 text-center space-y-2">
@@ -282,7 +336,7 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
         </div>
 
         {/* Right Detail Panel */}
-        <div className={`md:col-span-7 panel-card p-5 ${!selectedReviewId && 'hidden md:block'}`}>
+        <div className={`md:col-span-7 panel-card p-5 ${!selectedReviewId ? 'hidden md:block' : 'block'}`}>
           {selectedReview ? (
             <div className="space-y-4">
               {/* Mobile Back Button */}
@@ -349,7 +403,7 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
                     disabled={isGenerating}
                     className="text-xs text-[#1F5F4A] hover:underline font-medium flex items-center gap-1 disabled:opacity-50"
                   >
-                    <RotateCcw className={`w-3 h-3 ${isGenerating ? 'animate-spin' : ''}`} />
+                    <RotateCcw className={`w-3 h-3 ${isGenerating && generatingReviewId === selectedReview.id ? 'animate-spin' : ''}`} />
                     Genera risposta
                   </button>
                 </div>
@@ -360,7 +414,7 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
 
                 <textarea
                   value={draftReplyText}
-                  onChange={(e) => setDraftReplyText(e.target.value)}
+                  onChange={(e) => handleTextChange(e.target.value)}
                   rows={4}
                   disabled={isGenerating}
                   placeholder="Scrivi o genera una risposta..."
@@ -374,11 +428,11 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
               {/* Action Buttons */}
               <div className="flex items-center justify-between pt-2">
                 <button
-                  onClick={handleDiscard}
+                  onClick={handleDiscardOrCancel}
                   disabled={isSaving}
                   className="btn-secondary px-3 py-1.5 text-xs text-[#B3382C] hover:bg-[#B3382C]/10"
                 >
-                  Scarta
+                  {selectedReview.status === 'pubblicata' || selectedReview.replyText ? 'Annulla modifiche' : 'Scarta'}
                 </button>
 
                 <div className="flex items-center gap-2">
@@ -394,7 +448,7 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
                     disabled={isSaving || !draftReplyText.trim()}
                     className="btn-primary px-4 py-1.5 text-xs disabled:opacity-50"
                   >
-                    Approva e pubblica
+                    {selectedReview.status === 'pubblicata' ? 'Aggiorna risposta pubblicata' : 'Approva e pubblica'}
                   </button>
                 </div>
               </div>

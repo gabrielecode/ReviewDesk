@@ -71,7 +71,7 @@ export const initialData: AppData = {
       text: 'Sehr gutes Essen und netter Service in Lugano. The polenta was delicious. War leider etwas voll am Samstag.',
       date: '2026-10-26',
       status: 'bozza_pronta',
-      replyText: 'Hallo Hans! Thank you so much for visiting us in Lugano. We are glad you enjoyed the polenta! We note your feedback about the Saturday crowd and hope to welcome you back soon. Cordiali saluti, Chef Marco'
+      draftText: 'Hallo Hans! Thank you so much for visiting us in Lugano. We are glad you enjoyed the polenta! We note your feedback about the Saturday crowd and hope to welcome you back soon. Cordiali saluti, Chef Marco'
     },
     {
       id: 'ost-3',
@@ -215,7 +215,7 @@ export const initialData: AppData = {
       text: 'Amazing haircut and styling in Mendrisio! Super professional.',
       date: '2026-10-25',
       status: 'bozza_pronta',
-      replyText: 'Hello Jessica! Thank you so much for the lovely feedback. It was a pleasure styling your hair in Mendrisio! Best regards, Elena'
+      draftText: 'Hello Jessica! Thank you so much for the lovely feedback. It was a pleasure styling your hair in Mendrisio! Best regards, Elena'
     },
     {
       id: 'sal-3',
@@ -335,7 +335,7 @@ export const initialData: AppData = {
       text: 'Sehr professionelle Physiotherapie in Bellinzona. Sehr zu empfehlen für Sportverletzungen.',
       date: '2026-10-25',
       status: 'bozza_pronta',
-      replyText: 'Gentile Ursula, La ringraziamo per le Sue gentili parole. È un piacere sapere che la nostra fisioterapia sia stata utile per la Sua ripresa. Cordiali saluti, Dr. Luca Bernasconi'
+      draftText: 'Gentile Ursula, La ringraziamo per le Sue gentili parole. È un piacere sapere che la nostra fisioterapia sia stata utile per la Sua ripresa. Cordiali saluti, Dr. Luca Bernasconi'
     },
     {
       id: 'stu-3',
@@ -445,7 +445,9 @@ export const initialData: AppData = {
       clientName: 'Daniele Rossi',
       phone: '+41 79 123 45 67',
       date: '2026-10-28 14:30',
-      status: 'recensione_ricevuta'
+      status: 'recensione_ricevuta',
+      consent: true,
+      consentAt: '2026-10-28 14:30'
     },
     {
       id: 'req-2',
@@ -453,7 +455,9 @@ export const initialData: AppData = {
       clientName: 'Chiara Benz',
       phone: '+41 78 987 65 43',
       date: '2026-10-27 19:15',
-      status: 'vista'
+      status: 'vista',
+      consent: true,
+      consentAt: '2026-10-27 19:15'
     },
     {
       id: 'req-3',
@@ -461,7 +465,9 @@ export const initialData: AppData = {
       clientName: 'Paolo Sutter',
       phone: '+41 76 555 44 33',
       date: '2026-10-26 12:45',
-      status: 'inviata'
+      status: 'inviata',
+      consent: true,
+      consentAt: '2026-10-26 12:45'
     },
     {
       id: 'req-4',
@@ -469,7 +475,9 @@ export const initialData: AppData = {
       clientName: 'Nadia P.',
       phone: '+41 79 444 33 22',
       date: '2026-10-27 16:00',
-      status: 'vista'
+      status: 'vista',
+      consent: true,
+      consentAt: '2026-10-27 16:00'
     },
     {
       id: 'req-5',
@@ -477,12 +485,14 @@ export const initialData: AppData = {
       clientName: 'Moreno B.',
       phone: '+41 78 111 22 33',
       date: '2026-10-26 10:00',
-      status: 'recensione_ricevuta'
+      status: 'recensione_ricevuta',
+      consent: true,
+      consentAt: '2026-10-26 10:00'
     }
   ]
 };
 
-const STORAGE_KEY = 'reviewdesk_app_data_v1';
+const STORAGE_KEY = 'reviewdesk_app_data_v2';
 
 export function getAppData(): AppData {
   try {

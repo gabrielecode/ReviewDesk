@@ -5,7 +5,7 @@ export interface Business {
   location: string;
   signerName: string;
   tone: 'caloroso' | 'formale' | 'diretto';
-  defaultLanguage: string;
+  defaultLanguage: 'it' | 'de' | 'en' | 'auto';
   phrasesToAvoid: string;
   privateContact: string;
   googleUrl: string;
@@ -23,6 +23,7 @@ export interface Review {
   status: 'da_rispondere' | 'bozza_pronta' | 'pubblicata';
   replyText?: string;
   replyDate?: string;
+  draftText?: string;
 }
 
 export interface RequestItem {
@@ -32,6 +33,9 @@ export interface RequestItem {
   phone: string;
   date: string;
   status: 'inviata' | 'vista' | 'recensione_ricevuta';
+  text?: string;
+  consent: boolean;
+  consentAt?: string;
 }
 
 export interface InsightsData {
