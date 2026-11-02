@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Business } from '../types';
-import { supabase } from '../lib/supabase';
+import { supabase, getAuthToken } from '../lib/supabase';
 import { AlertTriangle, RefreshCw, ExternalLink, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 
 interface SettingsTabProps {
@@ -68,14 +68,13 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ business, onUpdateBusi
     setPreviewDraft(null);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const token = await getAuthToken();
 
       const res = await fetch('/api/draft-reply', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           reviewText: 'Ottimo servizio e ambiente fantastico! Complimenti a tutto lo staff.',

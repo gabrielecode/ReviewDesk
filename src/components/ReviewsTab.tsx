@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { Review, Business } from '../types';
 import { updateReviewInDb } from '../storage';
-import { supabase } from '../lib/supabase';
+import { supabase, getAuthToken } from '../lib/supabase';
 
 interface ReviewsTabProps {
   business: Business;
@@ -90,14 +90,13 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
     setGenerationError(null);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const token = await getAuthToken();
 
       const res = await fetch('/api/draft-reply', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           reviewId: target.id,

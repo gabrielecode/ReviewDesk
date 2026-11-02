@@ -9,7 +9,7 @@ import {
   CartesianGrid 
 } from 'recharts';
 import { Business, Review, InsightsData } from '../types';
-import { supabase } from '../lib/supabase';
+import { supabase, getAuthToken } from '../lib/supabase';
 
 interface StatsTabProps {
   business: Business;
@@ -104,14 +104,13 @@ export const StatsTab: React.FC<StatsTabProps> = ({ business, reviews }) => {
     setLoadingInsights(true);
     setInsightsError(null);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const token = await getAuthToken();
 
       const res = await fetch('/api/insights', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ business, reviews }),
       });
