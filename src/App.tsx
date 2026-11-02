@@ -5,6 +5,7 @@ import { ReviewsTab } from './components/ReviewsTab';
 import { RequestsTab } from './components/RequestsTab';
 import { StatsTab } from './components/StatsTab';
 import { SettingsTab } from './components/SettingsTab';
+import { AdminAccessTab } from './components/AdminAccessTab';
 import { Footer } from './components/Footer';
 import { LandingPage } from './components/LandingPage';
 import { AuthScreen } from './components/AuthScreen';
@@ -395,6 +396,10 @@ export default function App() {
               business={currentBusiness}
               onUpdateBusiness={handleUpdateBusiness}
             />
+          )}
+
+          {activeTab === 'admin_access' && (
+            <AdminAccessTab userEmail={session?.user?.email || ''} />
           )}
         </div>
 

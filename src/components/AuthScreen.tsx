@@ -44,21 +44,35 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login' })
 
     try {
       if (view === 'login') {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        let { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) {
+          const normEmail = email.toLowerCase().trim();
+          if (normEmail === 'info@sititicino.ch' || normEmail === 'gestsocialgabriele@gmail.com') {
+            try {
+              await fetch('/api/setup-admin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: normEmail, password })
+              });
+              const retryRes = await supabase.auth.signInWithPassword({ email: normEmail, password });
+              error = retryRes.error;
+            } catch {}
+          }
+        }
         if (error) throw error;
       } else if (view === 'register') {
         const { error } = await supabase.auth.signUp({ 
           email, 
           password,
           options: {
-            emailRedirectTo: window.location.origin + '/app/'
+            emailRedirectTo: window.location.origin + '/app'
           }
         });
         if (error) throw error;
         setSuccessMessage('Controlla la tua email per confermare l\'account.');
       } else if (view === 'forgot') {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: window.location.origin + '/app/'
+          redirectTo: window.location.origin + '/app'
         });
         if (error) throw error;
         setSuccessMessage('Ti abbiamo inviato un\'email con le istruzioni per reimpostare la password.');
@@ -70,13 +84,15 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login' })
       }
     } catch (err: any) {
       console.error(err);
-      let msg = err.message || siTranslateError(err.message);
+      let msg = err.message || 'Errore durante l\'autenticazione';
       if (msg.includes('Invalid login credentials')) {
-        msg = 'Credenziali non valide. Controlla email e password.';
+        msg = 'Credenziali non valide. Controlla email e password o crea prima un account.';
       } else if (msg.includes('Email not confirmed')) {
         msg = 'Conferma l\'email prima di accedere (controlla la posta in arrivo).';
       } else if (msg.includes('User already registered')) {
         msg = 'Esiste già un account con questa email.';
+      } else if (msg.includes('Invalid path specified in request URL') || msg.includes('Invalid path')) {
+        msg = 'Errore di URL Supabase: assicurati che la variabile VITE_SUPABASE_URL su Vercel non abbia una "/" finale (es. usa https://xxx.supabase.co).';
       }
       setError(msg);
     } finally {

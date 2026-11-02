@@ -8,7 +8,9 @@ import {
   RotateCcw,
   Globe,
   Plus,
-  LogOut
+  LogOut,
+  Users,
+  Shield
 } from 'lucide-react';
 import { Business } from '../types';
 
@@ -39,12 +41,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [dropdownOpen, setDropdownOpen] = React.useState(false);
 
+  const isAdmin = userEmail ? (
+    ['gestsocialgabriele@gmail.com', 'info@sititicino.ch', 'admin@reviewdesk.ch'].includes(userEmail.toLowerCase().trim()) ||
+    userEmail.toLowerCase().includes('admin') ||
+    userEmail.toLowerCase().includes('sititicino')
+  ) : true; // Show by default or for admins
+
   const navItems = [
     { id: 'landing', label: 'Sito Pubblico', icon: Globe },
     { id: 'reviews', label: 'Recensioni', icon: MessageSquare },
     { id: 'requests', label: 'Richieste', icon: Send },
     { id: 'stats', label: 'Statistiche', icon: BarChart3 },
     { id: 'settings', label: 'Impostazioni', icon: Settings },
+    ...(isAdmin ? [{ id: 'admin_access', label: 'Gestione Accessi', icon: Users, badge: 'Admin' }] : [])
   ];
 
   return (

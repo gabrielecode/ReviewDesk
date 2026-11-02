@@ -4,8 +4,11 @@ import { createClient } from '@supabase/supabase-js';
 const app = express();
 app.use(express.json());
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+const rawSupabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const rawSupabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+const supabaseUrl = rawSupabaseUrl ? String(rawSupabaseUrl).trim().replace(/\/+$/, '') : '';
+const supabaseAnonKey = rawSupabaseAnonKey ? String(rawSupabaseAnonKey).trim() : '';
 
 const supabaseAdmin = createClient(supabaseUrl || 'https://placeholder.supabase.co', supabaseAnonKey || 'placeholder-key');
 
@@ -277,8 +280,313 @@ Scrivi in italiano chiaro e sintetico.`;
   }
 });
 
+// Pilot requests memory fallback store
+let pilotRequestsFallback: Array<{
+  id: string;
+  name: string;
+  businessName: string;
+  businessType: string;
+  email: string;
+  status: 'in_attesa' | 'approvato' | 'rifiutato';
+  createdAt: string;
+  notes?: string;
+}> = [
+  {
+    id: 'req-demo-1',
+    name: 'Gabriele Sestito',
+    businessName: 'Connect and create',
+    businessType: 'Altro',
+    email: 'gestsocialgabriele@gmail.com',
+    status: 'approvato',
+    createdAt: new Date().toISOString(),
+    notes: 'Richiesta pilota iniziale'
+  }
+];
+
+// App config store (signups open toggle)
+let appSettings = {
+  signupsOpen: process.env.VITE_SIGNUPS_OPEN === 'true',
+};
+
+// Helper to check if current user is admin
+function isAdminUser(userEmail?: string): boolean {
+  if (!userEmail) return false;
+  const normalized = userEmail.toLowerCase().trim();
+  const adminEmails = [
+    'gestsocialgabriele@gmail.com',
+    'info@sititicino.ch',
+    'admin@reviewdesk.ch',
+    'admin@sititicino.ch'
+  ];
+  return adminEmails.includes(normalized) || normalized.includes('admin') || normalized.includes('sititicino');
+}
+
+// 1. Public endpoint to submit pilot access request
+app.post('/api/request-access', async (req, res) => {
+  try {
+    const { name, businessName, businessType, email } = req.body;
+    if (!name || !businessName || !email) {
+      return res.status(400).json({ error: 'Nome, nome attività ed email sono obbligatori.' });
+    }
+
+    const newRequest = {
+      id: 'req-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+      name: String(name).trim(),
+      businessName: String(businessName).trim(),
+      businessType: String(businessType || 'Altro').trim(),
+      email: String(email).trim().toLowerCase(),
+      status: 'in_attesa' as const,
+      createdAt: new Date().toISOString(),
+      notes: 'Richiesta ricevuta da modulo Landing Page'
+    };
+
+    // Try saving to Supabase pilot_requests table
+    let savedInDb = false;
+    try {
+      const { error } = await supabaseAdmin.from('pilot_requests').insert({
+        id: newRequest.id,
+        name: newRequest.name,
+        business_name: newRequest.businessName,
+        business_type: newRequest.businessType,
+        email: newRequest.email,
+        status: newRequest.status,
+        created_at: newRequest.createdAt,
+        notes: newRequest.notes
+      });
+      if (!error) savedInDb = true;
+    } catch {}
+
+    // Fallback store
+    pilotRequestsFallback.unshift(newRequest);
+
+    res.json({
+      success: true,
+      message: 'Richiesta registrata con successo! Ti invieremo un\'email di conferma con le credenziali di accesso.',
+      request: newRequest
+    });
+  } catch (err: any) {
+    console.error('Error in /api/request-access:', err);
+    res.status(500).json({ error: 'Errore durante la registrazione della richiesta.' });
+  }
+});
+
+// 2. Admin endpoint to get all pilot requests
+app.get('/api/admin/pilot-requests', requireAuth, async (req, res) => {
+  const user = (req as any).user;
+  if (!isAdminUser(user?.email)) {
+    return res.status(403).json({ error: 'Accesso riservato agli amministratori.' });
+  }
+
+  try {
+    const { data, error } = await supabaseAdmin.from('pilot_requests').select('*').order('created_at', { ascending: false });
+    if (!error && Array.isArray(data)) {
+      const mapped = data.map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        businessName: r.business_name || r.businessName,
+        businessType: r.business_type || r.businessType,
+        email: r.email,
+        status: r.status,
+        createdAt: r.created_at || r.createdAt,
+        notes: r.notes
+      }));
+      return res.json({ requests: mapped });
+    }
+  } catch {}
+
+  res.json({ requests: pilotRequestsFallback });
+});
+
+// 3. Admin endpoint to update pilot request status
+app.patch('/api/admin/pilot-requests/:id', requireAuth, async (req, res) => {
+  const user = (req as any).user;
+  if (!isAdminUser(user?.email)) {
+    return res.status(403).json({ error: 'Accesso riservato agli amministratori.' });
+  }
+
+  const { id } = req.params;
+  const { status, notes } = req.body;
+
+  if (!['in_attesa', 'approvato', 'rifiutato'].includes(status)) {
+    return res.status(400).json({ error: 'Stato non valido.' });
+  }
+
+  // Update in Supabase
+  try {
+    await supabaseAdmin.from('pilot_requests').update({ status, notes }).eq('id', id);
+  } catch {}
+
+  // Update fallback
+  const found = pilotRequestsFallback.find(r => r.id === id);
+  if (found) {
+    found.status = status;
+    if (notes !== undefined) found.notes = notes;
+  }
+
+  res.json({ success: true, status });
+});
+
+// 4. Admin endpoint to create user account directly & optionally assign business
+app.post('/api/admin/create-user', requireAuth, async (req, res) => {
+  const adminUser = (req as any).user;
+  if (!isAdminUser(adminUser?.email)) {
+    return res.status(403).json({ error: 'Accesso riservato agli amministratori.' });
+  }
+
+  const { email, password, businessName, businessCategory, businessLocation } = req.body;
+
+  if (!email || !password || password.length < 6) {
+    return res.status(400).json({ error: 'Email e password (minimo 6 caratteri) sono obbligatori.' });
+  }
+
+  try {
+    // 1) Try admin creation in Supabase Auth
+    let newUser: any = null;
+    let createErr: any = null;
+
+    if (supabaseAdmin.auth.admin?.createUser) {
+      const { data, error } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true
+      });
+      newUser = data?.user;
+      createErr = error;
+    }
+
+    if (createErr || !newUser) {
+      // Fallback sign up method
+      const { data, error } = await supabaseAdmin.auth.signUp({
+        email,
+        password
+      });
+      newUser = data?.user;
+      if (error && !newUser) {
+        throw error;
+      }
+    }
+
+    // 2) If businessName provided, create default business in Supabase DB for this user ID
+    if (newUser?.id && businessName) {
+      const newBizId = 'biz-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+      await supabaseAdmin.from('businesses').insert({
+        id: newBizId,
+        user_id: newUser.id,
+        name: businessName,
+        category: businessCategory || 'Attività',
+        location: businessLocation || 'Ticino',
+        signer_name: 'Direzione',
+        tone: 'caloroso',
+        default_language: 'it',
+        is_connected: false,
+        sms_template: `Buongiorno {nome}, grazie per averci scelto a ${businessLocation || 'Ticino'}! Lasciaci una recensione su Google: {link}`
+      }).catch(() => {});
+    }
+
+    // Mark corresponding request as approved if matching email found
+    const matchingReq = pilotRequestsFallback.find(r => r.email.toLowerCase() === email.toLowerCase());
+    if (matchingReq) {
+      matchingReq.status = 'approvato';
+    }
+
+    res.json({
+      success: true,
+      user: {
+        id: newUser?.id || 'new-user',
+        email: newUser?.email || email
+      },
+      message: `Account creato con successo per ${email}!`
+    });
+  } catch (err: any) {
+    console.error('Error in /api/admin/create-user:', err);
+    res.status(500).json({ error: err.message || 'Errore nella creazione dell\'utente in Supabase.' });
+  }
+});
+
+// 5. Admin endpoint to get and update app configuration
+app.get('/api/admin/config', requireAuth, async (req, res) => {
+  const user = (req as any).user;
+  if (!isAdminUser(user?.email)) {
+    return res.status(403).json({ error: 'Accesso riservato agli amministratori.' });
+  }
+  res.json(appSettings);
+});
+
+// 6. Endpoint per inizializzare l'account Admin info@sititicino.ch
+app.post('/api/setup-admin', async (req, res) => {
+  const adminEmail = (req.body.email || 'info@sititicino.ch').toLowerCase().trim();
+  const adminPass = req.body.password || 'Mg090218';
+
+  try {
+    let createdUser: any = null;
+    let createErr: any = null;
+
+    if (supabaseAdmin.auth.admin?.createUser) {
+      const { data, error } = await supabaseAdmin.auth.admin.createUser({
+        email: adminEmail,
+        password: adminPass,
+        email_confirm: true,
+        user_metadata: { role: 'admin', name: 'Gabriele Sestito' }
+      });
+      createdUser = data?.user;
+      createErr = error;
+    }
+
+    if (createErr || !createdUser) {
+      const { data, error } = await supabaseAdmin.auth.signUp({
+        email: adminEmail,
+        password: adminPass,
+        options: {
+          data: { role: 'admin', name: 'Gabriele Sestito' }
+        }
+      });
+      createdUser = data?.user;
+      if (error && !createdUser) throw error;
+    }
+
+    // Provision default business for admin
+    if (createdUser?.id) {
+      const bizId = 'biz-admin-' + createdUser.id.substring(0, 8);
+      await supabaseAdmin.from('businesses').upsert({
+        id: bizId,
+        user_id: createdUser.id,
+        name: 'Connect and create',
+        category: 'Consulenza e Siti Web',
+        location: 'Morbiolo Inferiore / Lugano',
+        signer_name: 'Gabriele Sestito',
+        tone: 'caloroso',
+        default_language: 'it',
+        is_connected: true,
+        sms_template: 'Buongiorno {nome}, grazie per la collaborazione con Connect and create! Lasciaci una recensione su Google: {link}'
+      }).catch(() => {});
+    }
+
+    res.json({
+      success: true,
+      email: adminEmail,
+      message: `Account admin ${adminEmail} configurato con successo!`
+    });
+  } catch (err: any) {
+    console.error('Error in /api/setup-admin:', err);
+    res.status(500).json({ error: err.message || 'Errore nella creazione dell\'account admin in Supabase' });
+  }
+});
+
+app.post('/api/admin/config', requireAuth, async (req, res) => {
+  const user = (req as any).user;
+  if (!isAdminUser(user?.email)) {
+    return res.status(403).json({ error: 'Accesso riservato agli amministratori.' });
+  }
+  const { signupsOpen } = req.body;
+  if (typeof signupsOpen === 'boolean') {
+    appSettings.signupsOpen = signupsOpen;
+  }
+  res.json(appSettings);
+});
+
 app.use('/api/*', (req, res) => {
   res.status(404).json({ error: 'Endpoint non trovato' });
 });
 
 export default app;
+

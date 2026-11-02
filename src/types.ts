@@ -42,3 +42,15 @@ export interface InsightsData {
   strengths: string[];
   improvements: string[];
 }
+
+export interface PilotRequest {
+  id: string;
+  name: string;
+  businessName: string;
+  businessType: string;
+  email: string;
+  status: 'in_attesa' | 'approvato' | 'rifiutato';
+  createdAt: string;
+  notes?: string;
+}
+

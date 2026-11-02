@@ -13,12 +13,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenDashboard }) => 
   const [okConsent, setOkConsent] = useState(false);
   const [esito, setEsito] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nome || !attivita || !tipo || !email || !okConsent) return;
     
+    try {
+      await fetch('/api/request-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: nome, businessName: attivita, businessType: tipo, email })
+      });
+    } catch (err) {
+      console.error('Error submitting access request to API:', err);
+    }
+
     const body = `Nome: ${nome}\nAttività: ${attivita}\nTipo: ${tipo}\nEmail: ${email}\n\nAccetto di essere contattato per l’accesso pilota di ReviewDesk.`;
-    setEsito('Apro la tua email: premi Invia per completare la richiesta.');
+    setEsito('Richiesta registrata con successo nel sistema ReviewDesk! Apro la tua email per inviare la conferma a info@sititicino.ch.');
     window.location.href = `mailto:info@sititicino.ch?subject=${encodeURIComponent('Richiesta accesso pilota ReviewDesk')}&body=${encodeURIComponent(body)}`;
   };
 
