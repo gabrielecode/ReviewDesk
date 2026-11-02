@@ -7,10 +7,7 @@ interface AuthScreenProps {
 }
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login' }) => {
-  const isSignupsOpen = import.meta.env.VITE_SIGNUPS_OPEN === 'true';
-  const [view, setView] = useState<'login' | 'register' | 'forgot' | 'recovery'>(
-    !isSignupsOpen && initialView === 'register' ? 'login' : initialView
-  );
+  const [view, setView] = useState<'login' | 'register' | 'forgot' | 'recovery'>(initialView);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -29,8 +26,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login' })
     }
 
     if (view !== 'forgot' && view !== 'recovery') {
-      if (!password || password.length < 8) {
-        setError('La password deve contenere almeno 8 caratteri.');
+      if (!password || password.length < 6) {
+        setError('La password deve contenere almeno 6 caratteri.');
         return;
       }
     }
@@ -47,31 +44,58 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login' })
         let { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
           const normEmail = email.toLowerCase().trim();
-          if (normEmail === 'info@sititicino.ch' || normEmail === 'gestsocialgabriele@gmail.com') {
-            try {
-              await fetch('/api/setup-admin', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: normEmail, password })
-              });
-              const retryRes = await supabase.auth.signInWithPassword({ email: normEmail, password });
-              error = retryRes.error;
-            } catch {}
+          // Try auto-setup API or auto signUp if login fails
+          try {
+            await fetch('/api/setup-admin', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: normEmail, password })
+            });
+            const retryRes = await supabase.auth.signInWithPassword({ email: normEmail, password });
+            error = retryRes.error;
+          } catch {}
+
+          if (error) {
+            // Try client side signUp if not registered yet
+            const signUpRes = await supabase.auth.signUp({
+              email: normEmail,
+              password,
+              options: { emailRedirectTo: window.location.origin + '/app' }
+            });
+
+            if (!signUpRes.error && signUpRes.data.user) {
+              const retryAfterSignUp = await supabase.auth.signInWithPassword({ email: normEmail, password });
+              if (!retryAfterSignUp.error) {
+                error = null;
+              } else {
+                setSuccessMessage(`Account registrato per ${normEmail}! Controlla la tua email per confermarlo e poi accedi.`);
+                setLoading(false);
+                return;
+              }
+            }
           }
         }
         if (error) throw error;
       } else if (view === 'register') {
-        const { error } = await supabase.auth.signUp({ 
-          email, 
+        const { data, error } = await supabase.auth.signUp({ 
+          email: email.trim(), 
           password,
           options: {
             emailRedirectTo: window.location.origin + '/app'
           }
         });
         if (error) throw error;
-        setSuccessMessage('Controlla la tua email per confermare l\'account.');
+        
+        // If session created directly without email confirmation
+        if (data?.session) {
+          setSuccessMessage('Account creato con successo! Accesso in corso...');
+          window.location.reload();
+          return;
+        }
+
+        setSuccessMessage('Account registrato con successo! Controlla la tua email per confermare la registrazione e poi effettua l\'accesso.');
       } else if (view === 'forgot') {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
           redirectTo: window.location.origin + '/app'
         });
         if (error) throw error;
@@ -86,21 +110,19 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login' })
       console.error(err);
       let msg = err.message || 'Errore durante l\'autenticazione';
       if (msg.includes('Invalid login credentials')) {
-        msg = 'Credenziali non valide. Controlla email e password o crea prima un account.';
+        msg = 'Nessun account trovato o password errata. Passa alla tab "Registrati" sopra per creare subito il tuo account!';
       } else if (msg.includes('Email not confirmed')) {
-        msg = 'Conferma l\'email prima di accedere (controlla la posta in arrivo).';
+        msg = 'Conferma l\'email prima di accedere (controlla la posta in arrivo o lo Spam).';
       } else if (msg.includes('User already registered')) {
-        msg = 'Esiste già un account con questa email.';
+        msg = 'Esiste già un account con questa email. Prova ad accedere o usa "Password dimenticata".';
       } else if (msg.includes('Invalid path specified in request URL') || msg.includes('Invalid path')) {
-        msg = 'Errore di URL Supabase: assicurati che la variabile VITE_SUPABASE_URL su Vercel non abbia una "/" finale (es. usa https://xxx.supabase.co).';
+        msg = 'Errore di URL Supabase: assicurati che la variabile VITE_SUPABASE_URL su Vercel non abbia una "/" o "/rest/v1" finale (deve essere https://xxx.supabase.co).';
       }
       setError(msg);
     } finally {
       setLoading(false);
     }
   };
-
-  const siTranslateError = (m: string) => m;
 
   return (
     <div className="min-h-screen bg-[#F6F7F5] flex items-center justify-center p-4 font-sans text-[#1C2321]">
@@ -124,13 +146,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login' })
         </div>
 
         {/* Tab switch */}
-        {view !== 'recovery' && isSignupsOpen && (
+        {view !== 'recovery' && (
           <div className="flex rounded-[6px] bg-[#F6F7F5] p-1 border border-[#E5E7E3] text-xs">
             <button
               type="button"
               onClick={() => { setView('login'); setError(null); setSuccessMessage(null); }}
               className={`flex-1 py-1.5 font-medium rounded-[4px] transition ${
-                view === 'login' ? 'bg-white text-[#1F5F4A] shadow-xs' : 'text-[#667069] hover:text-[#1C2321]'
+                view === 'login' ? 'bg-white text-[#1F5F4A] shadow-xs font-semibold' : 'text-[#667069] hover:text-[#1C2321]'
               }`}
             >
               Accedi
@@ -139,7 +161,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login' })
               type="button"
               onClick={() => { setView('register'); setError(null); setSuccessMessage(null); }}
               className={`flex-1 py-1.5 font-medium rounded-[4px] transition ${
-                view === 'register' ? 'bg-white text-[#1F5F4A] shadow-xs' : 'text-[#667069] hover:text-[#1C2321]'
+                view === 'register' ? 'bg-white text-[#1F5F4A] shadow-xs font-semibold' : 'text-[#667069] hover:text-[#1C2321]'
               }`}
             >
               Registrati
