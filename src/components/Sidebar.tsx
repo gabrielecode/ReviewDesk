@@ -5,7 +5,8 @@ import {
   BarChart3, 
   Settings, 
   ChevronDown,
-  RotateCcw
+  RotateCcw,
+  Globe
 } from 'lucide-react';
 import { Business } from '../types';
 
@@ -31,6 +32,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [dropdownOpen, setDropdownOpen] = React.useState(false);
 
   const navItems = [
+    { id: 'landing', label: 'Sito Pubblico', icon: Globe },
     { id: 'reviews', label: 'Recensioni', icon: MessageSquare },
     { id: 'requests', label: 'Richieste', icon: Send },
     { id: 'stats', label: 'Statistiche', icon: BarChart3 },
@@ -42,10 +44,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Desktop Sidebar (220px wide, white, right border) */}
       <aside className="hidden md:flex flex-col w-[220px] bg-white border-r border-[#E5E7E3] shrink-0 select-none">
         {/* App Name Top */}
-        <div className="px-5 py-5 border-b border-[#E5E7E3]">
-          <h1 className="font-semibold text-base text-[#1C2321] tracking-tight">
-            ReviewDesk
-          </h1>
+        <div className="px-5 py-4 border-b border-[#E5E7E3]">
+          <button 
+            onClick={() => setActiveTab('landing')}
+            className="w-full text-left group flex items-center justify-between"
+            title="Torna alla home page"
+          >
+            <div>
+              <h1 className="font-semibold text-base text-[#1C2321] group-hover:text-[#1F5F4A] tracking-tight transition flex items-center gap-1.5">
+                ReviewDesk
+              </h1>
+              <span className="text-[11px] text-[#667069] group-hover:underline">← Torna alla home</span>
+            </div>
+          </button>
         </div>
 
         {/* Business Selector & Connection Status */}
@@ -146,7 +157,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Mobile Top Header & Bottom Bar */}
       <div className="md:hidden flex flex-col w-full">
         <header className="bg-white border-b border-[#E5E7E3] px-4 py-3 sticky top-0 z-40 flex items-center justify-between">
-          <span className="font-semibold text-sm text-[#1C2321]">ReviewDesk</span>
+          <button 
+            onClick={() => setActiveTab('landing')}
+            className="font-semibold text-sm text-[#1F5F4A] flex items-center gap-1 hover:underline"
+          >
+            ← Home ReviewDesk
+          </button>
           <select
             value={currentBusiness?.id}
             onChange={(e) => onSelectBusiness(e.target.value)}

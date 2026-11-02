@@ -1,20 +1,44 @@
 <!doctype html>
-<html lang="it">
+<html lang="it-CH">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ReviewDesk - Gestione Recensioni Google per Esercenti</title>
-    <meta name="description" content="App per piccoli esercenti ticinesi che gestisce le recensioni Google con intelligenza artificiale." />
-    <meta property="og:title" content="ReviewDesk - Gestione Recensioni Google" />
-    <meta property="og:description" content="App per piccoli esercenti ticinesi che gestisce le recensioni Google con intelligenza artificiale." />
-    <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gestione recensioni Google in Ticino | ReviewDesk</title>
+    <meta name="description" content="ReviewDesk prepara le risposte alle tue recensioni Google in italiano, tedesco e inglese. Tu approvi, noi facciamo il resto. Pilota gratuito in Ticino.">
+    <link rel="canonical" href="https://reviewdesk.ch/">
+    <link rel="alternate" hreflang="it-CH" href="https://reviewdesk.ch/">
+    <meta name="robots" content="index, follow, max-image-preview:large">
+    <meta name="author" content="Connect &amp; Create">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="it_CH">
+    <meta property="og:site_name" content="ReviewDesk">
+    <meta property="og:title" content="ReviewDesk: risposte alle recensioni Google, approvate da te">
+    <meta property="og:description" content="Per ristoranti, saloni e studi in Ticino. Bozze di risposta in tre lingue e richieste di recensione nel rispetto delle regole di Google.">
+    <meta property="og:url" content="https://reviewdesk.ch/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#1F5F4A">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231F5F4A'/%3E%3Cpath d='M9 10h14v9h-8l-4 4v-4H9z' fill='%23fff'/%3E%3C/svg%3E">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⭐</text></svg>" />
+    <script type="application/ld+json">
+    {"@context":"https://schema.org","@graph":[
+    {"@type":"Organization","@id":"https://sititicino.ch/#org","name":"Connect & Create","url":"https://sititicino.ch","founder":{"@type":"Person","name":"Gabriele Sestito"},"address":{"@type":"PostalAddress","addressLocality":"Morbio Inferiore","addressRegion":"TI","addressCountry":"CH"}},
+    {"@type":"WebSite","@id":"https://reviewdesk.ch/#site","url":"https://reviewdesk.ch/","name":"ReviewDesk","inLanguage":"it-CH","publisher":{"@id":"https://sititicino.ch/#org"}},
+    {"@type":"SoftwareApplication","name":"ReviewDesk","applicationCategory":"BusinessApplication","operatingSystem":"Web","inLanguage":"it-CH","description":"Gestione delle recensioni Google per ristoranti, saloni e studi: bozze di risposta in italiano, tedesco e inglese approvate dal titolare e richieste di recensione con consenso del cliente.","offers":{"@type":"Offer","price":"0","priceCurrency":"CHF","description":"Accesso pilota gratuito"},"publisher":{"@id":"https://sititicino.ch/#org"}},
+    {"@type":"FAQPage","mainEntity":[
+    {"@type":"Question","name":"ReviewDesk pubblica le risposte da solo?","acceptedAnswer":{"@type":"Answer","text":"No. Ogni risposta è una bozza: viene pubblicata solo dopo la tua approvazione. Puoi modificarla, rigenerarla o scartarla."}},
+    {"@type":"Question","name":"Posso chiedere recensioni solo ai clienti soddisfatti?","acceptedAnswer":{"@type":"Answer","text":"No, e ReviewDesk non lo permette. Le regole di Google vietano di selezionare chi può lasciare una recensione e di offrire premi in cambio. La richiesta va a tutti i clienti."}},
+    {"@type":"Question","name":"In quali lingue risponde?","acceptedAnswer":{"@type":"Answer","text":"In italiano, tedesco o inglese. Puoi scegliere una lingua fissa oppure rispondere nella lingua della recensione, utile con i clienti turisti."}},
+    {"@type":"Question","name":"Cosa succede con le recensioni negative?","acceptedAnswer":{"@type":"Answer","text":"Vengono segnalate come «Richiede attenzione». La bozza ringrazia, mostra empatia, non accusa il cliente e lo invita a un contatto privato. La pubblichi solo dopo averla riletta."}},
+    {"@type":"Question","name":"Come vengono trattati i dati dei clienti?","acceptedAnswer":{"@type":"Answer","text":"Il numero di telefono serve solo a inviare la richiesta di recensione, e solo se il cliente ha dato il consenso. Il trattamento segue la legge federale svizzera sulla protezione dei dati."}},
+    {"@type":"Question","name":"Quanto costa?","acceptedAnswer":{"@type":"Answer","text":"Il periodo pilota è gratuito. Il prezzo successivo ti verrà comunicato prima di qualsiasi addebito, senza vincoli di durata."}},
+    {"@type":"Question","name":"Mi serve esperienza tecnica?","acceptedAnswer":{"@type":"Answer","text":"No. Durante il pilota configuriamo l’attività insieme a te e ti mostriamo come approvare le risposte dal telefono o dal computer."}},
+    {"@type":"Question","name":"Il collegamento con Google Business Profile è già attivo?","acceptedAnswer":{"@type":"Answer","text":"Lo stiamo attivando con le attività pilota. Per questo seguiamo ogni attività da vicino nella fase iniziale e ti diciamo chiaramente cosa è già disponibile."}}
+    ]}]}
+    </script>
   </head>
-  <body>
+  <body class="bg-[#F6F7F5] text-[#1C2321] font-sans antialiased">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

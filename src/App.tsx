@@ -6,6 +6,7 @@ import { RequestsTab } from './components/RequestsTab';
 import { StatsTab } from './components/StatsTab';
 import { SettingsTab } from './components/SettingsTab';
 import { Footer } from './components/Footer';
+import { LandingPage } from './components/LandingPage';
 import { Business, Review, RequestItem } from './types';
 import { getAppData, saveAppData, resetAppData } from './storage';
 
@@ -14,7 +15,7 @@ export default function App() {
   const [currentBusinessId, setCurrentBusinessId] = useState<string>('osteria-demo');
   const [reviews, setReviews] = useState<Review[]>([]);
   const [requests, setRequests] = useState<RequestItem[]>([]);
-  const [activeTab, setActiveTab] = useState<string>('reviews');
+  const [activeTab, setActiveTab] = useState<string>('landing');
   const [isConnectionModalOpen, setIsConnectionModalOpen] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -75,6 +76,10 @@ export default function App() {
         <p className="text-xs text-[#667069]">Caricamento in corso...</p>
       </div>
     );
+  }
+
+  if (activeTab === 'landing') {
+    return <LandingPage onOpenDashboard={() => setActiveTab('reviews')} />;
   }
 
   return (
