@@ -230,7 +230,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login' })
             </div>
           )}
 
-          {view === 'register' && isSignupsOpen && (
+          {view === 'register' && (
             <div className="space-y-1">
               <label className="text-xs font-medium text-[#667069] block">Conferma password</label>
               <div className="relative">
@@ -261,17 +261,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login' })
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
-
-        {!isSignupsOpen && view === 'login' && (
-          <div className="text-center pt-3 border-t border-[#E5E7E3]">
-            <p className="text-xs text-[#667069]">
-              L'accesso è su invito durante il periodo pilota.{' '}
-              <a href="/#richiesta" className="text-[#1F5F4A] font-medium underline">
-                Richiedilo dalla home
-              </a>
-            </p>
-          </div>
-        )}
 
         {view === 'forgot' && (
           <div className="text-center pt-2">
