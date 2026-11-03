@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import dns from 'dns';
 import net from 'net';
 import { URL } from 'url';
+import { createHash } from 'crypto';
 
 const app = express();
 app.use(express.json());
@@ -35,7 +36,6 @@ function ensureServiceKey(res: express.Response): boolean {
   return true;
 }
 
-// Auth verification middleware
 async function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -54,7 +54,6 @@ async function requireAuth(req: express.Request, res: express.Response, next: ex
   }
 }
 
-// User-based rate limiter (30 requests per minute per user ID)
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 function rateLimiter(req: express.Request, res: express.Response, next: express.NextFunction) {
   const user = (req as any).user;
@@ -82,7 +81,6 @@ function rateLimiter(req: express.Request, res: express.Response, next: express.
   next();
 }
 
-// Helper to check admin status via ADMIN_EMAILS env variable only
 function isAdminUser(userEmail?: string): boolean {
   if (!userEmail) return false;
   const adminEmailsEnv = process.env.ADMIN_EMAILS || '';
@@ -112,7 +110,6 @@ async function setSignupsOpenDb(open: boolean): Promise<void> {
   } catch {}
 }
 
-// Health check endpoint (public)
 app.get('/api/health', (req, res) => {
   const openRouterConfigured = !!process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.trim() !== '';
   res.json({
@@ -121,7 +118,6 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Authentication Endpoints
 app.post('/api/auth/login', async (req, res) => {
   const email = String(req.body.email || '').toLowerCase().trim();
   const password = String(req.body.password || '');
@@ -177,7 +173,6 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-// Timeout helper for OpenRouter calls (25 seconds)
 async function withTimeout<T>(promise: Promise<T>, timeoutMs = 25000): Promise<T> {
   let timeoutHandle: NodeJS.Timeout;
   const timeoutPromise = new Promise<never>((_, reject) => {
@@ -222,14 +217,6 @@ function buildSmartDraftReply(reviewText: string, author: string, stars: number,
   }
 }
 
-function buildSmartInsights(business: any, reviews: any[]): { strengths: string[]; improvements: string[] } {
-  return {
-    strengths: [],
-    improvements: []
-  };
-}
-
-// Helper to load business securely and check ownership
 async function verifyBusinessOwnership(req: express.Request, res: express.Response) {
   const user = (req as any).user;
   const businessId = req.body?.businessId || req.query?.businessId;
@@ -273,7 +260,6 @@ async function verifyBusinessOwnership(req: express.Request, res: express.Respon
   }
 }
 
-// Draft reply endpoint (protected)
 app.post('/api/draft-reply', requireAuth, rateLimiter, async (req, res) => {
   try {
     const business = await verifyBusinessOwnership(req, res);
@@ -345,7 +331,6 @@ Regole tassative:
   }
 });
 
-// Insights endpoint (protected)
 app.post('/api/insights', requireAuth, rateLimiter, async (req, res) => {
   try {
     const business = await verifyBusinessOwnership(req, res);
@@ -413,8 +398,7 @@ Scrivi in italiano chiaro e sintetico.`;
       }
     }
 
-    const fallbackInsights = buildSmartInsights(business, reviews);
-    return res.json(fallbackInsights);
+    return res.json({ strengths: [], improvements: [] });
   } catch (error: any) {
     console.error('Insights error:', error);
     return res.json({ strengths: [], improvements: [] });
@@ -449,20 +433,16 @@ async function resolveGoogleShareUrl(rawUrl: string): Promise<{ resolvedUrl: str
   if (!rawUrl) return { resolvedUrl: '' };
   try {
     let currentUrl = rawUrl.trim();
-    const parsed = new URL(currentUrl.startsWith('http') ? currentUrl : 'https://' + currentUrl);
-    if (parsed.protocol !== 'https:') {
-      throw new Error('Solo protocollo HTTPS consentito');
-    }
+    if (!currentUrl.startsWith('http')) currentUrl = 'https://' + currentUrl;
+    const parsed = new URL(currentUrl);
+    if (parsed.protocol !== 'https:') throw new Error('Solo protocollo HTTPS consentito');
+    
     const allowedHosts = ['share.google', 'g.page', 'maps.app.goo.gl', 'google.com', 'goo.gl'];
     const hostname = parsed.hostname.toLowerCase();
     const isAllowed = allowedHosts.some(h => hostname === h || hostname.endsWith('.' + h));
-    if (!isAllowed) {
-      throw new Error('Host non consentito');
-    }
+    if (!isAllowed) throw new Error('Host non consentito');
 
-    if (await isPrivateIp(hostname)) {
-      throw new Error('IP privato non consentito');
-    }
+    if (await isPrivateIp(hostname)) throw new Error('IP privato non consentito');
 
     let redirectCount = 0;
     let resUrl = parsed.toString();
@@ -503,137 +483,173 @@ async function resolveGoogleShareUrl(rawUrl: string): Promise<{ resolvedUrl: str
 
     return { resolvedUrl: resUrl, extractedPlaceId, extractedName };
   } catch (err) {
-    console.warn('SSRF / URL resolution error:', err);
+    console.warn('URL resolution error:', err);
     return { resolvedUrl: rawUrl };
   }
 }
 
-// Endpoint to sync/import Google Reviews for a connected business (using Places API New)
 app.post('/api/sync-google-reviews', requireAuth, rateLimiter, async (req, res) => {
   try {
-    const business = await verifyBusinessOwnership(req, res);
-    if (!business) return;
+    const dbBusiness = await verifyBusinessOwnership(req, res);
+    if (!dbBusiness) return;
 
-    let finalUrl = business.googleUrl || '';
-    let resolvedPlaceId = business.googlePlaceId || '';
-    let resolvedName = business.name || 'Attività';
+    const body = req.body || {};
+    const businessId = body.businessId;
+    const googlePlaceId = (body.googlePlaceId || dbBusiness.googlePlaceId || '').replace(/^places\//, '');
+    const googleUrl = body.googleUrl || dbBusiness.googleUrl || '';
+    const mapsApiKey = body.apiKey || dbBusiness.googleApiKey || process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;
+    const businessName = body.businessName || dbBusiness.name;
+    const location = body.location || dbBusiness.location;
 
-    if (business.googleUrl && (business.googleUrl.includes('share.google') || business.googleUrl.includes('goo.gl') || business.googleUrl.includes('g.page') || !business.googleUrl.includes('writereview'))) {
-      const urlInfo = await resolveGoogleShareUrl(business.googleUrl);
-      if (urlInfo.resolvedUrl) finalUrl = urlInfo.resolvedUrl;
-      if (urlInfo.extractedPlaceId) resolvedPlaceId = urlInfo.extractedPlaceId;
-      if (urlInfo.extractedName) resolvedName = urlInfo.extractedName;
+    if (!mapsApiKey) {
+      return res.status(400).json({ success: false, message: 'Chiave API Google Maps mancante. Inseriscila nelle impostazioni.' });
     }
 
-    let importedReviews: any[] = [];
-    const mapsApiKey = business.googleApiKey || process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;
+    let resolvedPlaceId = googlePlaceId;
+    let resolvedUrl = googleUrl;
 
-    if (resolvedPlaceId && mapsApiKey) {
-      try {
-        const placesApiUrl = `https://places.googleapis.com/v1/places/${encodeURIComponent(resolvedPlaceId)}`;
-        const pRes = await fetch(placesApiUrl, {
+    if (!resolvedPlaceId) {
+      if (googleUrl) {
+        const urlInfo = await resolveGoogleShareUrl(googleUrl);
+        resolvedPlaceId = urlInfo.extractedPlaceId || '';
+        resolvedUrl = urlInfo.resolvedUrl || googleUrl;
+      }
+      
+      if (!resolvedPlaceId) {
+        const searchQuery = `${businessName} ${location}`;
+        const searchRes = await fetch('https://places.googleapis.com/v1/places:searchText', {
+          method: 'POST',
           headers: {
+            'Content-Type': 'application/json',
             'X-Goog-Api-Key': mapsApiKey,
-            'X-Goog-FieldMask': 'displayName,rating,reviews'
-          }
+            'X-Goog-FieldMask': 'places.id,places.displayName'
+          },
+          body: JSON.stringify({ textQuery: searchQuery })
         });
-        if (pRes.ok) {
-          const pData = await pRes.json();
-          if (pData.displayName?.text) {
-            resolvedName = pData.displayName.text;
-          }
-          if (Array.isArray(pData.reviews)) {
-            importedReviews = pData.reviews.map((rev: any) => {
-              const author = rev.authorAttribution?.displayName || 'Cliente Google';
-              const rating = rev.rating || 5;
-              const text = rev.text?.text || '';
-              const publishTime = rev.publishTime ? rev.publishTime.split('T')[0] : new Date().toISOString().split('T')[0];
-              
-              // Generate a stable ID based on business, author and text hash
-              const stableId = `g-rev-${business.id}-${Buffer.from(author + text.substring(0, 50)).toString('hex').substring(0, 16)}`;
-              
-              return {
-                id: stableId,
-                business_id: business.id,
-                author,
-                stars: rating,
-                text,
-                date: publishTime,
-                status: 'da_rispondere',
-                reply_text: null,
-                reply_date: null
-              };
-            });
+        
+        if (searchRes.ok) {
+          const searchData = await searchRes.json();
+          if (searchData.places && searchData.places.length > 0) {
+            resolvedPlaceId = searchData.places[0].id;
           }
         }
-      } catch (pErr) {
-        console.warn('Places API (New) fetch error:', pErr);
       }
     }
 
-    if (importedReviews.length === 0) {
-      const msg = (!resolvedPlaceId || !mapsApiKey)
-        ? 'Configurazione incompleta: assicurati di aver inserito il Google Place ID e la Chiave API Google Maps (con Places API abilitata) nelle impostazioni.'
-        : `Nessuna recensione trovata per l'attività "${resolvedName}" (Place ID: ${resolvedPlaceId}).`;
+    if (!resolvedPlaceId) {
+      return res.status(400).json({ success: false, message: 'Impossibile trovare il Place ID per questa attività. Inseriscilo manualmente nelle impostazioni.' });
+    }
 
-      console.warn('Sync failed:', msg);
-      return res.status(400).json({
-        success: false,
-        count: 0,
-        reviews: [],
-        message: msg
+    const placesApiUrl = `https://places.googleapis.com/v1/places/${encodeURIComponent(resolvedPlaceId)}`;
+    const pRes = await fetch(placesApiUrl, {
+      headers: {
+        'X-Goog-Api-Key': mapsApiKey,
+        'X-Goog-FieldMask': 'displayName,rating,reviews'
+      }
+    });
+
+    if (!pRes.ok) {
+      const pErr = await pRes.json();
+      return res.status(502).json({ success: false, message: pErr.error?.message || 'Errore durante la chiamata alle API di Google.' });
+    }
+
+    const pData = await pRes.json();
+    const rawReviews = pData.reviews || [];
+
+    const { data: existingReviews } = await supabaseAdmin
+      .from('reviews')
+      .select('id, author, text')
+      .eq('business_id', businessId);
+
+    const existingMap = new Map<string, { author: string, text: string }>();
+    (existingReviews || []).forEach(r => {
+      existingMap.set(r.id, { author: r.author, text: r.text });
+    });
+
+    const newReviews: any[] = [];
+    let alreadyPresent = 0;
+
+    for (const rev of rawReviews) {
+      const author = rev.authorAttribution?.displayName || 'Cliente Google';
+      const text = rev.text?.text || '';
+      const rating = rev.rating || 5;
+      const publishTime = rev.publishTime ? rev.publishTime.split('T')[0] : new Date().toISOString().split('T')[0];
+      
+      const contentForHash = `${rev.name || author}|${publishTime}|${text}`;
+      const stableId = `g-rev-${businessId}-${createHash('sha1').update(contentForHash).digest('hex').slice(0, 20)}`;
+
+      const isDuplicate = existingMap.has(stableId) || Array.from(existingMap.values()).some(e => e.author === author && e.text.slice(0, 80) === text.slice(0, 80));
+
+      if (isDuplicate) {
+        alreadyPresent++;
+        continue;
+      }
+
+      newReviews.push({
+        id: stableId,
+        business_id: businessId,
+        author,
+        stars: rating,
+        text,
+        date: publishTime,
+        status: 'da_rispondere',
+        reply_text: null,
+        reply_date: null,
+        draft_text: null
       });
     }
 
-    try {
-      await supabaseAdmin.from('reviews').upsert(importedReviews);
-    } catch (saveErr) {
-      console.warn('Error saving imported reviews to Supabase:', saveErr);
+    if (newReviews.length > 0) {
+      const { error: insertError } = await supabaseAdmin.from('reviews').insert(newReviews);
+      if (insertError) {
+        return res.status(500).json({ success: false, message: `Errore salvataggio recensioni: ${insertError.message}` });
+      }
     }
 
-    const nowIso = new Date().toISOString();
+    const lastSyncAt = new Date().toISOString();
     try {
       await supabaseAdmin.from('businesses').update({
         is_connected: true,
-        last_sync_at: nowIso,
-        google_place_id: resolvedPlaceId || null,
-        google_url: finalUrl || null
-      }).eq('id', business.id);
-    } catch {}
+        last_sync_at: lastSyncAt,
+        google_place_id: resolvedPlaceId,
+        google_url: resolvedUrl
+      }).eq('id', businessId);
+    } catch (err) {
+      console.error('Error updating business status:', err);
+    }
 
-    const mappedReviews = importedReviews.map(r => ({
-      id: r.id,
-      businessId: r.business_id,
-      author: r.author,
-      stars: r.stars,
-      text: r.text,
-      date: r.date,
-      status: r.status,
-      replyText: r.reply_text,
-      replyDate: r.reply_date,
-      draftText: r.draft_text
-    }));
+    const message = newReviews.length === 0 
+      ? `Tutte le recensioni recenti sono già presenti. Nota: Google Places API fornisce solo le 5 recensioni più recenti.`
+      : `Sincronizzazione completata! Importate ${newReviews.length} nuove recensioni.`;
 
     return res.json({
       success: true,
-      count: mappedReviews.length,
-      reviews: mappedReviews,
-      resolvedUrl: finalUrl,
+      count: newReviews.length,
+      alreadyPresent,
+      reviews: newReviews.map(r => ({
+        id: r.id,
+        businessId: r.business_id,
+        author: r.author,
+        stars: r.stars,
+        text: r.text,
+        date: r.date,
+        status: r.status,
+        replyText: r.reply_text,
+        replyDate: r.reply_date,
+        draftText: r.draft_text
+      })),
+      resolvedUrl,
       googlePlaceId: resolvedPlaceId,
-      lastSyncAt: nowIso,
-      message: `Sincronizzazione completata con successo! Importate ${mappedReviews.length} recensioni per ${resolvedName}.`
+      lastSyncAt,
+      message
     });
+
   } catch (err: any) {
-    console.error('CRITICAL Error in /api/sync-google-reviews:', err);
-    return res.status(500).json({ 
-      success: false,
-      error: err.message || 'Errore interno durante la sincronizzazione.',
-      details: err.stack || 'No details'
-    });
+    console.error('Sync error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Errore interno.' });
   }
 });
 
-// Pilot Requests Endpoints
 app.post('/api/request-access', async (req, res) => {
   if (!ensureServiceKey(res)) return;
   try {

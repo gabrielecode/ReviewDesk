@@ -31,12 +31,8 @@ export function mapBusinessFromDb(row: any): Business {
   };
 }
 
-export const skippedBusinessColumns = new Set<string>();
-export const skippedReviewColumns = new Set<string>();
-export const skippedRequestColumns = new Set<string>();
-
-export function mapBusinessToDb(b: Business, userId: string, skip: Set<string> = skippedBusinessColumns) {
-  const row: any = {
+export function mapBusinessToDb(b: Business, userId: string) {
+  return {
     id: b.id,
     user_id: userId,
     name: b.name,
@@ -46,19 +42,18 @@ export function mapBusinessToDb(b: Business, userId: string, skip: Set<string> =
     tone: b.tone,
     default_language: b.defaultLanguage,
     is_connected: b.isConnected,
-    sms_template: b.smsTemplate
+    sms_template: b.smsTemplate,
+    phrases_to_avoid: b.phrasesToAvoid,
+    private_contact: b.privateContact,
+    google_url: b.googleUrl,
+    google_place_id: b.googlePlaceId || null,
+    google_account_id: b.googleAccountId || null,
+    google_location_id: b.googleLocationId || null,
+    google_api_key: b.googleApiKey || null,
+    sync_frequency: b.syncFrequency || 'daily',
+    auto_sync_reviews: b.autoSyncReviews ?? true,
+    last_sync_at: b.lastSyncAt || null
   };
-  if (!skip.has('phrases_to_avoid')) row.phrases_to_avoid = b.phrasesToAvoid;
-  if (!skip.has('private_contact')) row.private_contact = b.privateContact;
-  if (!skip.has('google_url')) row.google_url = b.googleUrl;
-  if (!skip.has('google_place_id')) row.google_place_id = b.googlePlaceId || null;
-  if (!skip.has('google_account_id')) row.google_account_id = b.googleAccountId || null;
-  if (!skip.has('google_location_id')) row.google_location_id = b.googleLocationId || null;
-  if (!skip.has('google_api_key')) row.google_api_key = b.googleApiKey || null;
-  if (!skip.has('sync_frequency')) row.sync_frequency = b.syncFrequency || 'daily';
-  if (!skip.has('auto_sync_reviews')) row.auto_sync_reviews = b.autoSyncReviews ?? true;
-  if (!skip.has('last_sync_at')) row.last_sync_at = b.lastSyncAt || null;
-  return row;
 }
 
 export function mapReviewFromDb(row: any): Review {
@@ -69,27 +64,26 @@ export function mapReviewFromDb(row: any): Review {
     stars: row.stars || 5,
     text: row.text || '',
     date: row.date || row.review_date || new Date().toISOString().split('T')[0],
-    status: row.status || 'da_rispondere',
+    status: row.status === 'risposto' ? 'pubblicata' : (row.status || 'da_rispondere'),
     replyText: row.reply_text || row.replyText,
     replyDate: row.reply_date || row.replyDate,
     draftText: row.draft_text || row.draftText
   };
 }
 
-export function mapReviewToDb(r: Review, skip: Set<string> = skippedReviewColumns) {
-  const row: any = {
+export function mapReviewToDb(r: Review) {
+  return {
     id: r.id,
     business_id: r.businessId,
     author: r.author,
     stars: r.stars,
-    status: r.status
+    status: r.status,
+    text: r.text,
+    date: r.date,
+    reply_text: r.replyText || null,
+    reply_date: r.replyDate || null,
+    draft_text: r.draftText || null
   };
-  if (!skip.has('text')) row.text = r.text;
-  if (!skip.has('date')) row.date = r.date;
-  if (!skip.has('reply_text')) row.reply_text = r.replyText || null;
-  if (!skip.has('reply_date')) row.reply_date = r.replyDate || null;
-  if (!skip.has('draft_text')) row.draft_text = r.draftText || null;
-  return row;
 }
 
 export function mapRequestFromDb(row: any): RequestItem {
@@ -106,148 +100,70 @@ export function mapRequestFromDb(row: any): RequestItem {
   };
 }
 
-export function mapRequestToDb(req: RequestItem, skip: Set<string> = skippedRequestColumns) {
-  const row: any = {
+export function mapRequestToDb(req: RequestItem) {
+  return {
     id: req.id,
     business_id: req.businessId,
     client_name: req.clientName,
-    status: req.status
+    status: req.status,
+    phone: req.phone,
+    date: req.date,
+    text: req.text || null,
+    consent: req.consent,
+    consent_at: req.consentAt || null
   };
-  if (!skip.has('phone')) row.phone = req.phone;
-  if (!skip.has('date')) row.date = req.date;
-  if (!skip.has('text')) row.text = req.text || null;
-  if (!skip.has('consent')) row.consent = req.consent;
-  if (!skip.has('consent_at')) row.consent_at = req.consentAt || null;
-  return row;
 }
 
 export async function getAppData(userId: string): Promise<AppData> {
-  let businesses: Business[] = [];
+  const bizRes = await supabase.from('businesses').select('*').eq('user_id', userId);
+  if (bizRes.error) throw new Error(`Fetch businesses error: ${bizRes.error.message}`);
+  
+  const businesses = (bizRes.data || []).map(mapBusinessFromDb);
   let reviews: Review[] = [];
   let requests: RequestItem[] = [];
 
-  try {
-    const bizRes = await supabase.from('businesses').select('*').eq('user_id', userId);
-    if (!bizRes.error && bizRes.data) {
-      businesses = bizRes.data.map(mapBusinessFromDb);
-    } else if (bizRes.error) {
-      console.error('Supabase fetch businesses error:', bizRes.error);
-    }
-
-    if (businesses.length > 0) {
-      const bizIds = businesses.map(b => b.id);
-      
-      const revRes = await supabase.from('reviews').select('*').in('business_id', bizIds);
-      if (!revRes.error && revRes.data) {
-        reviews = revRes.data.map(mapReviewFromDb);
-      }
-
-      const reqRes = await supabase.from('requests').select('*').in('business_id', bizIds);
-      if (!reqRes.error && reqRes.data) {
-        requests = reqRes.data.map(mapRequestFromDb);
-      }
-    }
-  } catch (err) {
-    console.error('Supabase DB fetch error:', err);
+  if (businesses.length > 0) {
+    const bizIds = businesses.map(b => b.id);
+    reviews = await getReviewsForBusinesses(bizIds);
+    requests = await getRequestsForBusinesses(bizIds);
   }
 
   return { businesses, reviews, requests };
 }
 
-export async function saveAppData(userId: string, data: AppData): Promise<void> {
-  try {
-    if (data.businesses.length > 0) {
-      for (let attempt = 0; attempt < 5; attempt++) {
-        const bizRows = data.businesses.map(b => mapBusinessToDb(b, userId, skippedBusinessColumns));
-        const { error } = await supabase.from('businesses').upsert(bizRows);
-        if (error) {
-          const msg = error.message || '';
-          const match = msg.match(/Could not find the '([^']+)' column of 'businesses'/i);
-          if (match && match[1]) {
-            skippedBusinessColumns.add(match[1]);
-            continue;
-          }
-          throw error;
-        }
-        break;
-      }
-    }
+export async function getReviewsForBusinesses(ids: string[]): Promise<Review[]> {
+  const { data, error } = await supabase.from('reviews').select('*').in('business_id', ids);
+  if (error) throw new Error(`Fetch reviews error: ${error.message}`);
+  return (data || []).map(mapReviewFromDb);
+}
 
-    if (data.reviews.length > 0) {
-      for (let attempt = 0; attempt < 5; attempt++) {
-        const revRows = data.reviews.map(r => mapReviewToDb(r, skippedReviewColumns));
-        const { error } = await supabase.from('reviews').upsert(revRows);
-        if (error) {
-          const msg = error.message || '';
-          const match = msg.match(/Could not find the '([^']+)' column of 'reviews'/i);
-          if (match && match[1]) {
-            skippedReviewColumns.add(match[1]);
-            continue;
-          }
-          throw error;
-        }
-        break;
-      }
-    }
+export async function getRequestsForBusinesses(ids: string[]): Promise<RequestItem[]> {
+  const { data, error } = await supabase.from('requests').select('*').in('business_id', ids);
+  if (error) throw new Error(`Fetch requests error: ${error.message}`);
+  return (data || []).map(mapRequestFromDb);
+}
 
-    if (data.requests.length > 0) {
-      for (let attempt = 0; attempt < 5; attempt++) {
-        const reqRows = data.requests.map(req => mapRequestToDb(req, skippedRequestColumns));
-        const { error } = await supabase.from('requests').upsert(reqRows);
-        if (error) {
-          const msg = error.message || '';
-          const match = msg.match(/Could not find the '([^']+)' column of 'requests'/i);
-          if (match && match[1]) {
-            skippedRequestColumns.add(match[1]);
-            continue;
-          }
-          throw error;
-        }
-        break;
-      }
-    }
-  } catch (err) {
-    console.error('Supabase DB save error:', err);
-    throw err;
-  }
+export async function saveBusiness(userId: string, b: Business): Promise<void> {
+  const row = mapBusinessToDb(b, userId);
+  const { error } = await supabase.from('businesses').upsert(row);
+  if (error) throw new Error(`Save business error: ${error.message}`);
 }
 
 export async function updateReviewInDb(reviewId: string, updates: Partial<Review>): Promise<void> {
-  try {
-    const dbUpdates: any = {};
-    if (updates.status !== undefined) dbUpdates.status = updates.status;
-    if (updates.draftText !== undefined) dbUpdates.draft_text = updates.draftText;
-    if (updates.replyText !== undefined) dbUpdates.reply_text = updates.replyText;
-    if (updates.replyDate !== undefined) dbUpdates.reply_date = updates.replyDate;
+  const dbUpdates: any = {};
+  if (updates.hasOwnProperty('status')) dbUpdates.status = updates.status;
+  if (updates.hasOwnProperty('draftText')) dbUpdates.draft_text = updates.draftText === undefined ? null : updates.draftText;
+  if (updates.hasOwnProperty('replyText')) dbUpdates.reply_text = updates.replyText === undefined ? null : updates.replyText;
+  if (updates.hasOwnProperty('replyDate')) dbUpdates.reply_date = updates.replyDate === undefined ? null : updates.replyDate;
 
-    const { error } = await supabase.from('reviews').update(dbUpdates).eq('id', reviewId);
-    if (error) throw error;
-  } catch (err) {
-    console.error('Supabase update review error:', err);
-    throw err;
-  }
+  const { error } = await supabase.from('reviews').update(dbUpdates).eq('id', reviewId);
+  if (error) throw new Error(`Update review error: ${error.message}`);
 }
 
 export async function createRequestInDb(req: RequestItem): Promise<void> {
-  try {
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const row = mapRequestToDb(req, skippedRequestColumns);
-      const { error } = await supabase.from('requests').insert(row);
-      if (error) {
-        const msg = error.message || '';
-        const match = msg.match(/Could not find the '([^']+)' column of 'requests'/i);
-        if (match && match[1]) {
-          skippedRequestColumns.add(match[1]);
-          continue;
-        }
-        throw error;
-      }
-      break;
-    }
-  } catch (err) {
-    console.error('Supabase create request error:', err);
-    throw err;
-  }
+  const row = mapRequestToDb(req);
+  const { error } = await supabase.from('requests').insert(row);
+  if (error) throw new Error(`Create request error: ${error.message}`);
 }
 
 export async function createBusinessInDb(userId: string, bData: Partial<Business>): Promise<Business> {
@@ -262,7 +178,7 @@ export async function createBusinessInDb(userId: string, bData: Partial<Business
     defaultLanguage: (bData.defaultLanguage as any) || 'it',
     phrasesToAvoid: bData.phrasesToAvoid || '',
     privateContact: bData.privateContact || '',
-    googleUrl: bData.googleUrl || 'https://g.page/review',
+    googleUrl: bData.googleUrl || '',
     isConnected: false,
     smsTemplate: bData.smsTemplate || 'Buongiorno {nome}, grazie per averci scelto! Lasciaci una recensione qui: {link}',
     googlePlaceId: bData.googlePlaceId || '',
@@ -274,31 +190,9 @@ export async function createBusinessInDb(userId: string, bData: Partial<Business
     lastSyncAt: ''
   };
 
-  for (let attempt = 0; attempt < 5; attempt++) {
-    try {
-      const row = mapBusinessToDb(newBiz, userId, skippedBusinessColumns);
-      const { error } = await supabase.from('businesses').insert(row);
-      if (error) {
-        const msg = error.message || '';
-        const match = msg.match(/Could not find the '([^']+)' column of 'businesses'/i);
-        if (match && match[1]) {
-          skippedBusinessColumns.add(match[1]);
-          continue;
-        }
-        throw error;
-      }
-      break;
-    } catch (err: any) {
-      if (attempt === 4) throw err;
-      const msg = err.message || '';
-      const match = msg.match(/Could not find the '([^']+)' column of 'businesses'/i);
-      if (match && match[1]) {
-        skippedBusinessColumns.add(match[1]);
-        continue;
-      }
-      throw err;
-    }
-  }
+  const row = mapBusinessToDb(newBiz, userId);
+  const { error } = await supabase.from('businesses').insert(row);
+  if (error) throw new Error(`Create business error: ${error.message}`);
 
   return newBiz;
 }
@@ -314,7 +208,7 @@ export const DEMO_BUSINESSES: Business[] = [
     defaultLanguage: 'it',
     phrasesToAvoid: 'costoso, lento',
     privateContact: 'direzione@osteriacentrale.ch',
-    googleUrl: 'https://g.page/review',
+    googleUrl: '',
     isConnected: false,
     smsTemplate: 'Ciao {nome}, grazie per averci scelto! Lasciaci una recensione qui: {link}',
     googlePlaceId: '',
@@ -344,43 +238,32 @@ export const DEMO_REVIEWS: Review[] = [
     stars: 4,
     text: 'Ambiente molto accogliente, peccato per il parcheggio difficile.',
     date: new Date().toISOString().split('T')[0],
-    status: 'risposto',
+    status: 'pubblicata',
     replyText: 'Grazie Luca! Siamo felici che ti sia piaciuto l\'ambiente. Purtroppo il parcheggio in centro è una sfida, ma speriamo di rivederti presto!',
     replyDate: new Date().toISOString().split('T')[0]
   }
 ];
 
-export async function clearDemoData(userId: string): Promise<AppData> {
-  // In a real app, we might want to delete demo records from DB.
-  // For now, we just reload real data.
-  return getAppData(userId);
-}
-
 export async function resetAppData(userId: string): Promise<AppData> {
-  // Seeds the DB with demo data for this user
-  try {
-    const bizRows = DEMO_BUSINESSES.map(b => mapBusinessToDb({ ...b, id: 'demo-' + userId.substring(0, 8) + '-' + b.id }, userId));
-    await supabase.from('businesses').upsert(bizRows);
-    
-    const revRows = DEMO_REVIEWS.map(r => mapReviewToDb({ ...r, businessId: bizRows[0].id }));
-    await supabase.from('reviews').upsert(revRows);
-  } catch (err) {
-    console.error('Error seeding demo data:', err);
-  }
+  const prefix = 'demo-' + userId.substring(0, 8) + '-';
+  const bizRows = DEMO_BUSINESSES.map(b => mapBusinessToDb({ ...b, id: prefix + b.id }, userId));
+  const { error: bizError } = await supabase.from('businesses').upsert(bizRows);
+  if (bizError) throw new Error(`Reset businesses error: ${bizError.message}`);
+  
+  const revRows = DEMO_REVIEWS.map(r => mapReviewToDb({ 
+    ...r, 
+    id: bizRows[0].id + '-' + r.id,
+    businessId: bizRows[0].id 
+  }));
+  const { error: revError } = await supabase.from('reviews').upsert(revRows);
+  if (revError) throw new Error(`Reset reviews error: ${revError.message}`);
+  
   return getAppData(userId);
-}
-
-export async function loadDemoDataToDb(userId: string): Promise<AppData> {
-  return resetAppData(userId);
 }
 
 export async function deleteMyAccount() {
-  try {
-    const { error } = await supabase.rpc('delete_my_account');
-    if (error) throw error;
-  } catch (err) {
-    console.error('Error deleting account via RPC:', err);
-  }
+  const { error } = await supabase.rpc('delete_my_account');
+  if (error) throw new Error(`Delete account error: ${error.message}`);
   await supabase.auth.signOut();
   return { success: true };
 }

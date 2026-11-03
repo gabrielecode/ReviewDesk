@@ -10,9 +10,11 @@ import { Footer } from './components/Footer';
 import { LandingPage } from './components/LandingPage';
 import { AuthScreen } from './components/AuthScreen';
 import { Business, Review, RequestItem } from './types';
-import { getAppData, saveAppData, createBusinessInDb } from './storage';
+import { getAppData, saveBusiness, createBusinessInDb, getReviewsForBusinesses, getRequestsForBusinesses } from './storage';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
-import { AlertCircle, RefreshCw, Sparkles } from 'lucide-react';
+import { AlertCircle, RefreshCw, Sparkles, X } from 'lucide-react';
+
+const STORAGE_KEY = 'reviewdesk.currentBusinessId';
 
 export default function App() {
   const [session, setSession] = useState<any>(null);
@@ -20,7 +22,7 @@ export default function App() {
   const [authView, setAuthView] = useState<'login' | 'register' | 'forgot' | 'recovery'>('login');
 
   const [businesses, setBusinesses] = useState<Business[]>([]);
-  const [currentBusinessId, setCurrentBusinessId] = useState<string>('');
+  const [currentBusinessId, setCurrentBusinessId] = useState<string>(localStorage.getItem(STORAGE_KEY) || '');
   const [reviews, setReviews] = useState<Review[]>([]);
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const [activeTab, setActiveTab] = useState<string>('reviews');
@@ -28,6 +30,7 @@ export default function App() {
   
   const [dataLoading, setDataLoading] = useState<boolean>(false);
   const [dataError, setDataError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const [showAddBusinessModal, setShowAddBusinessModal] = useState<boolean>(false);
   const [newBizName, setNewBizName] = useState<string>('');
@@ -37,6 +40,12 @@ export default function App() {
   const [isSubmittingBiz, setIsSubmittingBiz] = useState<boolean>(false);
 
   const currentBusiness = businesses.find(b => b.id === currentBusinessId) || businesses[0] || null;
+
+  useEffect(() => {
+    if (currentBusinessId) {
+      localStorage.setItem(STORAGE_KEY, currentBusinessId);
+    }
+  }, [currentBusinessId]);
 
   useEffect(() => {
     try {
@@ -110,50 +119,38 @@ export default function App() {
 
   const handleUpdateBusiness = async (updated: Partial<Business>) => {
     if (!currentBusiness || !session?.user?.id) return;
+    const originalBusinesses = [...businesses];
     const updatedBusinesses = businesses.map(b => b.id === currentBusiness.id ? { ...b, ...updated } : b);
     setBusinesses(updatedBusinesses);
+    setSaveError(null);
+    
     try {
-      await saveAppData(session.user.id, { businesses: updatedBusinesses, reviews, requests });
-    } catch (err) {
+      const bizToSave = updatedBusinesses.find(b => b.id === currentBusiness.id)!;
+      await saveBusiness(session.user.id, bizToSave);
+    } catch (err: any) {
       console.error('Failed to save business update:', err);
+      setBusinesses(originalBusinesses);
+      setSaveError(err.message || 'Errore nel salvataggio delle modifiche.');
+      throw err;
     }
   };
 
-  const handleImportReviews = async (newReviews: Review[], businessId: string, updatedBusinessFields?: Partial<Business>) => {
-    if (!session?.user?.id || !Array.isArray(newReviews) || newReviews.length === 0) return;
+  const handleImportReviews = async (_newReviews: Review[], businessId: string, updatedBusinessFields?: Partial<Business>) => {
+    if (!session?.user?.id) return;
 
-    let updatedBusinesses = businesses;
     if (updatedBusinessFields) {
-      updatedBusinesses = businesses.map(b => b.id === businessId ? { ...b, ...updatedBusinessFields } : b);
-      setBusinesses(updatedBusinesses);
+      setBusinesses(prev => prev.map(b => b.id === businessId ? { ...b, ...updatedBusinessFields } : b));
     }
-
-    if (newReviews.length === 0) {
-      // If no new reviews, only update business if needed
-      if (updatedBusinessFields) {
-        await handleUpdateBusiness(updatedBusinessFields);
-      }
-      return;
-    }
-
-    const otherReviews = reviews.filter(
-      r => r.businessId !== businessId || (!r.id.includes('-rev-') && !r.id.includes('-hist-') && !r.id.includes('g-rev-'))
-    );
-
-    const existingIds = new Set(otherReviews.map(r => r.id));
-    const filteredNew = newReviews.filter(r => !existingIds.has(r.id));
-    const combinedReviews = [...filteredNew, ...otherReviews];
-
-    setReviews(combinedReviews);
 
     try {
-      await saveAppData(session.user.id, {
-        businesses: updatedBusinesses,
-        reviews: combinedReviews,
-        requests
+      const fetchedReviews = await getReviewsForBusinesses([businessId]);
+      setReviews(prev => {
+        const others = prev.filter(r => r.businessId !== businessId);
+        return [...others, ...fetchedReviews];
       });
-    } catch (err) {
-      console.error('Failed to save imported reviews:', err);
+    } catch (err: any) {
+      console.error('Failed to reload reviews after import:', err);
+      setSaveError(err.message || 'Errore nel ricaricamento delle recensioni.');
     }
   };
 
@@ -169,8 +166,7 @@ export default function App() {
         location: newBizLocation || 'Città',
         signerName: newBizSigner || 'Staff',
       });
-      const updatedBusinesses = [...businesses, created];
-      setBusinesses(updatedBusinesses);
+      setBusinesses(prev => [...prev, created]);
       setCurrentBusinessId(created.id);
       setNewBizName('');
       setNewBizCategory('');
@@ -185,15 +181,29 @@ export default function App() {
   };
 
   const handleRefreshReviews = async () => {
-    if (!session?.user?.id) return;
-    const data = await getAppData(session.user.id);
-    setReviews(data.reviews);
+    if (!session?.user?.id || !currentBusinessId) return;
+    try {
+      const fetched = await getReviewsForBusinesses([currentBusinessId]);
+      setReviews(prev => {
+        const others = prev.filter(r => r.businessId !== currentBusinessId);
+        return [...others, ...fetched];
+      });
+    } catch (err: any) {
+      setSaveError(err.message || 'Errore nel ricaricamento delle recensioni.');
+    }
   };
 
   const handleRefreshRequests = async () => {
-    if (!session?.user?.id) return;
-    const data = await getAppData(session.user.id);
-    setRequests(data.requests);
+    if (!session?.user?.id || !currentBusinessId) return;
+    try {
+      const fetched = await getRequestsForBusinesses([currentBusinessId]);
+      setRequests(prev => {
+        const others = prev.filter(r => r.businessId !== currentBusinessId);
+        return [...others, ...fetched];
+      });
+    } catch (err: any) {
+      setSaveError(err.message || 'Errore nel ricaricamento delle richieste.');
+    }
   };
 
   const handleResetDemoData = async () => {
@@ -402,6 +412,21 @@ export default function App() {
 
       <main className="flex-1 flex flex-col min-w-0 pb-16 md:pb-0 overflow-y-auto">
         <div className="flex-1 p-6 md:p-8 max-w-7xl w-full mx-auto space-y-6">
+          {saveError && (
+            <div className="bg-[#B3382C] text-white p-3 rounded-[6px] flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-4">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                <span className="text-xs font-medium">{saveError}</span>
+              </div>
+              <button 
+                onClick={() => setSaveError(null)}
+                className="p-1 hover:bg-white/10 rounded transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           {activeTab === 'reviews' && currentBusiness && (
             <ReviewsTab
               key={currentBusiness.id}
