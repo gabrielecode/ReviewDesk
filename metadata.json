@@ -2,5 +2,5 @@
   "name": "ReviewDesk",
   "description": "Gestione recensioni Google per piccoli esercenti ticinesi con intelligenza artificiale OpenRouter",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

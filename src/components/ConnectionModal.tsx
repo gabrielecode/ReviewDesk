@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, ExternalLink, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Business } from '../types';
-import { getAuthToken } from '../lib/supabase';
+import { getAuthToken } from '../lib/firebase';
 
 interface ConnectionModalProps {
   isOpen: boolean;

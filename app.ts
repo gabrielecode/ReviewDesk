@@ -1,5 +1,9 @@
 import express from 'express';
-import { createClient } from '@supabase/supabase-js';
+import { db } from './src/db/index.ts';
+import { users, businesses, reviews, requests, pilotRequests, appSettings } from './src/db/schema.ts';
+import { eq, and, inArray, desc } from 'drizzle-orm';
+import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
+import { getOrCreateUser } from './src/db/users.ts';
 import dns from 'dns';
 import net from 'net';
 import { URL } from 'url';
@@ -8,65 +12,14 @@ import { createHash } from 'crypto';
 const app = express();
 app.use(express.json());
 
-function cleanSupabaseUrl(url: string | undefined | null): string {
-  if (!url) return '';
-  let cleaned = String(url).trim().replace(/\/+$/, '');
-  cleaned = cleaned.replace(/\/(rest|auth)(\/v1)?$/i, '');
-  cleaned = cleaned.replace(/\/+$/, '');
-  return cleaned;
-}
-
-const rawSupabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const rawSupabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-const rawSupabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
-
-const supabaseUrl = cleanSupabaseUrl(rawSupabaseUrl);
-const supabaseAnonKey = rawSupabaseAnonKey ? String(rawSupabaseAnonKey).trim() : '';
-const supabaseServiceKey = rawSupabaseServiceKey ? String(rawSupabaseServiceKey).trim() : '';
-
-const supabaseAdmin = createClient(supabaseUrl || 'https://placeholder.supabase.co', supabaseServiceKey || 'placeholder-key', {
-  auth: { autoRefreshToken: false, persistSession: false }
-});
-
-function ensureServiceKey(res: express.Response): boolean {
-  if (!supabaseServiceKey) {
-    res.status(500).json({ error: 'SUPABASE_SERVICE_ROLE_KEY mancante nelle variabili d\'ambiente.' });
-    return false;
-  }
-  return true;
-}
-
-async function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Token di autenticazione mancante.' });
-  }
-  const token = authHeader.split(' ')[1];
-  try {
-    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
-    if (error || !user) {
-      return res.status(401).json({ error: 'Token non valido o scaduto.' });
-    }
-    (req as any).user = user;
-    next();
-  } catch (err: any) {
-    return res.status(401).json({ error: 'Errore di autenticazione.' });
-  }
-}
-
+// Rate limiting map
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 function rateLimiter(req: express.Request, res: express.Response, next: express.NextFunction) {
   const user = (req as any).user;
-  const userId = user?.id || 'anonymous';
+  const userId = user?.uid || 'anonymous';
   const now = Date.now();
   const windowMs = 60 * 1000;
-  const maxRequests = 30;
-
-  for (const [key, val] of rateLimitMap.entries()) {
-    if (now > val.resetTime) {
-      rateLimitMap.delete(key);
-    }
-  }
+  const maxRequests = 60;
 
   let record = rateLimitMap.get(userId);
   if (!record || now > record.resetTime) {
@@ -90,13 +43,9 @@ function isAdminUser(userEmail?: string): boolean {
 
 async function getSignupsOpen(): Promise<boolean> {
   try {
-    const { data, error } = await supabaseAdmin
-      .from('app_settings')
-      .select('value')
-      .eq('key', 'signups_open')
-      .single();
-    if (!error && data) {
-      if (data.value === false || data.value === 'false') return false;
+    const [setting] = await db.select().from(appSettings).where(eq(appSettings.key, 'signups_open'));
+    if (setting) {
+      return setting.value !== 'false';
     }
   } catch {}
   return true;
@@ -104,9 +53,12 @@ async function getSignupsOpen(): Promise<boolean> {
 
 async function setSignupsOpenDb(open: boolean): Promise<void> {
   try {
-    await supabaseAdmin
-      .from('app_settings')
-      .upsert({ key: 'signups_open', value: open });
+    await db.insert(appSettings)
+      .values({ key: 'signups_open', value: String(open) })
+      .onConflictDoUpdate({
+        target: appSettings.key,
+        set: { value: String(open) }
+      });
   } catch {}
 }
 
@@ -118,59 +70,13 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-app.post('/api/auth/login', async (req, res) => {
-  const email = String(req.body.email || '').toLowerCase().trim();
-  const password = String(req.body.password || '');
-
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email e password sono obbligatori.' });
-  }
-
-  try {
-    const { data, error } = await supabaseAdmin.auth.signInWithPassword({ email, password });
-    if (error || !data.session) {
-      return res.status(401).json({ error: error?.message || 'Credenziali non valide o errore di accesso.' });
-    }
-    return res.json({ success: true, session: data.session });
-  } catch (err: any) {
-    return res.status(401).json({ error: err.message || 'Errore di autenticazione.' });
-  }
-});
-
-app.post('/api/auth/register', async (req, res) => {
-  if (!ensureServiceKey(res)) return;
-  const email = String(req.body.email || '').toLowerCase().trim();
-  const password = String(req.body.password || '');
-
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email e password sono obbligatori.' });
-  }
-
-  const signupsOpen = await getSignupsOpen();
-  if (!signupsOpen) {
-    return res.status(403).json({ error: 'Le registrazioni sono attualmente chiuse.' });
-  }
-
-  try {
-    const { data: createData, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true
-    });
-
-    if (createError) {
-      return res.status(400).json({ error: createError.message });
-    }
-
-    const { data: loginData, error: loginError } = await supabaseAdmin.auth.signInWithPassword({ email, password });
-    if (loginError || !loginData.session) {
-      return res.status(401).json({ error: loginError?.message || 'Errore durante l\'accesso dopo la registrazione.' });
-    }
-
-    return res.json({ success: true, session: loginData.session });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message || 'Errore durante la registrazione.' });
-  }
+// Sync user on every auth request
+app.use('/api/*', async (req, res, next) => {
+  if (req.path === '/api/health' || req.path === '/api/request-access') return next();
+  
+  // requireAuth is handled in specific routes, but we need the user object
+  // For routes that don't use requireAuth, we might not have a user
+  next();
 });
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs = 25000): Promise<T> {
@@ -191,11 +97,11 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs = 25000): Promise<T
   }
 }
 
-function buildSmartDraftReply(reviewText: string, author: string, stars: number, businessSettings: any): string {
-  const name = businessSettings?.name || 'Attività';
-  const signer = businessSettings?.signerName || 'Staff';
-  const privateContact = businessSettings?.privateContact || 'nostro contatto diretto';
-  const tone = businessSettings?.tone || 'caloroso';
+function buildSmartDraftReply(reviewText: string, author: string, stars: number, biz: any): string {
+  const name = biz.name || 'Attività';
+  const signer = biz.signerName || 'Staff';
+  const privateContact = biz.privateContact || 'nostro contatto diretto';
+  const tone = biz.tone || 'caloroso';
   const authorName = author || 'Cliente';
 
   if (stars <= 2) {
@@ -217,8 +123,10 @@ function buildSmartDraftReply(reviewText: string, author: string, stars: number,
   }
 }
 
-async function verifyBusinessOwnership(req: express.Request, res: express.Response) {
-  const user = (req as any).user;
+async function verifyBusinessOwnership(req: AuthRequest, res: express.Response) {
+  const user = req.user;
+  if (!user) return null;
+
   const businessId = req.body?.businessId || req.query?.businessId;
   if (!businessId) {
     res.status(400).json({ error: 'ID attività non specificato.' });
@@ -226,41 +134,146 @@ async function verifyBusinessOwnership(req: express.Request, res: express.Respon
   }
 
   try {
-    const { data, error } = await supabaseAdmin
-      .from('businesses')
-      .select('*')
-      .eq('id', businessId)
-      .eq('user_id', user.id)
-      .single();
-
-    if (error || !data) {
+    const [biz] = await db.select().from(businesses).where(and(eq(businesses.id, businessId), eq(businesses.userId, user.uid)));
+    if (!biz) {
       res.status(403).json({ error: 'Accesso negato o attività non trovata.' });
       return null;
     }
-
-    return {
-      id: data.id,
-      name: data.name,
-      category: data.category,
-      location: data.location,
-      signerName: data.signer_name,
-      tone: data.tone,
-      defaultLanguage: data.default_language,
-      phrasesToAvoid: data.phrases_to_avoid,
-      privateContact: data.private_contact,
-      googleUrl: data.google_url,
-      isConnected: data.is_connected,
-      smsTemplate: data.sms_template,
-      googlePlaceId: data.google_place_id,
-      googleApiKey: data.google_api_key
-    };
+    return biz;
   } catch (err) {
     res.status(403).json({ error: 'Accesso negato.' });
     return null;
   }
 }
 
-app.post('/api/draft-reply', requireAuth, rateLimiter, async (req, res) => {
+// Data fetching route (replacement for client-side Supabase calls)
+app.get('/api/data', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const user = req.user!;
+    await getOrCreateUser(user.uid, user.email || '');
+    
+    const bizs = await db.select().from(businesses).where(eq(businesses.userId, user.uid));
+    
+    let revs: any[] = [];
+    let reqs: any[] = [];
+    
+    if (bizs.length > 0) {
+      const bizIds = bizs.map(b => b.id);
+      revs = await db.select().from(reviews).where(inArray(reviews.businessId, bizIds));
+      reqs = await db.select().from(requests).where(inArray(requests.businessId, bizIds));
+    }
+    
+    res.json({ businesses: bizs, reviews: revs, requests: reqs });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/businesses', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const user = req.user!;
+    const b = req.body;
+    const id = b.id || 'biz-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+    
+    await db.insert(businesses)
+      .values({
+        id,
+        userId: user.uid,
+        name: b.name,
+        category: b.category,
+        location: b.location,
+        signerName: b.signerName,
+        tone: b.tone,
+        defaultLanguage: b.defaultLanguage,
+        isConnected: b.isConnected || false,
+        smsTemplate: b.smsTemplate,
+        phrasesToAvoid: b.phrasesToAvoid,
+        privateContact: b.privateContact,
+        googleUrl: b.googleUrl,
+        googlePlaceId: b.googlePlaceId,
+        googleAccountId: b.googleAccountId,
+        googleLocationId: b.googleLocationId,
+        googleApiKey: b.googleApiKey,
+        syncFrequency: b.syncFrequency || 'daily',
+        autoSyncReviews: b.autoSyncReviews ?? true,
+        lastSyncAt: b.lastSyncAt
+      })
+      .onConflictDoUpdate({
+        target: businesses.id,
+        set: {
+          name: b.name,
+          category: b.category,
+          location: b.location,
+          signerName: b.signerName,
+          tone: b.tone,
+          defaultLanguage: b.defaultLanguage,
+          isConnected: b.isConnected,
+          smsTemplate: b.smsTemplate,
+          phrasesToAvoid: b.phrasesToAvoid,
+          privateContact: b.privateContact,
+          googleUrl: b.googleUrl,
+          googlePlaceId: b.googlePlaceId,
+          googleAccountId: b.googleAccountId,
+          googleLocationId: b.googleLocationId,
+          googleApiKey: b.googleApiKey,
+          syncFrequency: b.syncFrequency,
+          autoSyncReviews: b.autoSyncReviews,
+          lastSyncAt: b.lastSyncAt
+        }
+      });
+      
+    res.json({ success: true, id });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch('/api/reviews/:id', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    
+    const [rev] = await db.select().from(reviews).where(eq(reviews.id, id));
+    if (!rev) return res.status(404).json({ error: 'Recensione non trovata' });
+    
+    // Ownership check via business
+    const [biz] = await db.select().from(businesses).where(and(eq(businesses.id, rev.businessId), eq(businesses.userId, req.user!.uid)));
+    if (!biz) return res.status(403).json({ error: 'Non autorizzato' });
+    
+    await db.update(reviews).set(updates).where(eq(reviews.id, id));
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/requests', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const r = req.body;
+    const id = r.id || 'req-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+    
+    // Check ownership of business
+    const [biz] = await db.select().from(businesses).where(and(eq(businesses.id, r.businessId), eq(businesses.userId, req.user!.uid)));
+    if (!biz) return res.status(403).json({ error: 'Non autorizzato' });
+    
+    await db.insert(requests).values({
+      id,
+      businessId: r.businessId,
+      clientName: r.clientName,
+      phone: r.phone,
+      date: r.date,
+      status: r.status || 'inviata',
+      text: r.text,
+      consent: r.consent || false,
+      consentAt: r.consentAt
+    });
+    res.json({ success: true, id });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/draft-reply', requireAuth, rateLimiter, async (req: AuthRequest, res) => {
   try {
     const business = await verifyBusinessOwnership(req, res);
     if (!business) return;
@@ -331,22 +344,16 @@ Regole tassative:
   }
 });
 
-app.post('/api/insights', requireAuth, rateLimiter, async (req, res) => {
+app.post('/api/insights', requireAuth, rateLimiter, async (req: AuthRequest, res) => {
   try {
     const business = await verifyBusinessOwnership(req, res);
     if (!business) return;
 
-    const { data: revRows } = await supabaseAdmin
-      .from('reviews')
-      .select('*')
-      .eq('business_id', business.id)
-      .limit(30);
-
-    const reviews = revRows || [];
+    const revs = await db.select().from(reviews).where(eq(reviews.businessId, business.id)).limit(30);
 
     if (process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.trim() !== '') {
       try {
-        const reviewsSummary = reviews.map((r: any) => {
+        const reviewsSummary = revs.map((r: any) => {
           const txt = typeof r.text === 'string' ? r.text.substring(0, 400) : '';
           return `[${r.stars || 5} stelle] ${txt || 'Solo stelle'}`;
         }).join('\n');
@@ -358,8 +365,8 @@ ${reviewsSummary}
 
 Restituisci un oggetto JSON con questa esatta struttura:
 {
-  "strengths": ["punto di forza 1", "punto di forza 2", "punto di forza 3"],
-  "improvements": ["area di miglioramento 1", "area di miglioramento 2"]
+  \"strengths\": [\"punto di forza 1\", \"punto di forza 2\", \"punto di forza 3\"],
+  \"improvements\": [\"area di miglioramento 1\", \"area di miglioramento 2\"]
 }
 Scrivi in italiano chiaro e sintetico.`;
 
@@ -488,18 +495,18 @@ async function resolveGoogleShareUrl(rawUrl: string): Promise<{ resolvedUrl: str
   }
 }
 
-app.post('/api/sync-google-reviews', requireAuth, rateLimiter, async (req, res) => {
+app.post('/api/sync-google-reviews', requireAuth, rateLimiter, async (req: AuthRequest, res) => {
   try {
-    const dbBusiness = await verifyBusinessOwnership(req, res);
-    if (!dbBusiness) return;
+    const dbBiz = await verifyBusinessOwnership(req, res);
+    if (!dbBiz) return;
 
     const body = req.body || {};
     const businessId = body.businessId;
-    const googlePlaceId = (body.googlePlaceId || dbBusiness.googlePlaceId || '').replace(/^places\//, '');
-    const googleUrl = body.googleUrl || dbBusiness.googleUrl || '';
-    const mapsApiKey = body.apiKey || dbBusiness.googleApiKey || process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;
-    const businessName = body.businessName || dbBusiness.name;
-    const location = body.location || dbBusiness.location;
+    const googlePlaceId = (body.googlePlaceId || dbBiz.googlePlaceId || '').replace(/^places\//, '');
+    const googleUrl = body.googleUrl || dbBiz.googleUrl || '';
+    const mapsApiKey = body.apiKey || dbBiz.googleApiKey || process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;
+    const businessName = body.businessName || dbBiz.name;
+    const location = body.location || dbBiz.location;
 
     if (!mapsApiKey) {
       return res.status(400).json({ success: false, message: 'Chiave API Google Maps mancante. Inseriscila nelle impostazioni.' });
@@ -556,17 +563,13 @@ app.post('/api/sync-google-reviews', requireAuth, rateLimiter, async (req, res) 
     const pData = await pRes.json();
     const rawReviews = pData.reviews || [];
 
-    const { data: existingReviews } = await supabaseAdmin
-      .from('reviews')
-      .select('id, author, text')
-      .eq('business_id', businessId);
-
+    const existingRevs = await db.select().from(reviews).where(eq(reviews.businessId, businessId));
     const existingMap = new Map<string, { author: string, text: string }>();
-    (existingReviews || []).forEach(r => {
-      existingMap.set(r.id, { author: r.author, text: r.text });
+    existingRevs.forEach(r => {
+      existingMap.set(r.id, { author: r.author, text: r.text || '' });
     });
 
-    const newReviews: any[] = [];
+    const newRevs: any[] = [];
     let alreadyPresent = 0;
 
     for (const rev of rawReviews) {
@@ -585,59 +588,38 @@ app.post('/api/sync-google-reviews', requireAuth, rateLimiter, async (req, res) 
         continue;
       }
 
-      newReviews.push({
+      newRevs.push({
         id: stableId,
-        business_id: businessId,
+        businessId: businessId,
         author,
         stars: rating,
         text,
         date: publishTime,
-        status: 'da_rispondere',
-        reply_text: null,
-        reply_date: null,
-        draft_text: null
+        status: 'da_rispondere'
       });
     }
 
-    if (newReviews.length > 0) {
-      const { error: insertError } = await supabaseAdmin.from('reviews').insert(newReviews);
-      if (insertError) {
-        return res.status(500).json({ success: false, message: `Errore salvataggio recensioni: ${insertError.message}` });
-      }
+    if (newRevs.length > 0) {
+      await db.insert(reviews).values(newRevs);
     }
 
     const lastSyncAt = new Date().toISOString();
-    try {
-      await supabaseAdmin.from('businesses').update({
-        is_connected: true,
-        last_sync_at: lastSyncAt,
-        google_place_id: resolvedPlaceId,
-        google_url: resolvedUrl
-      }).eq('id', businessId);
-    } catch (err) {
-      console.error('Error updating business status:', err);
-    }
+    await db.update(businesses).set({
+      isConnected: true,
+      lastSyncAt,
+      googlePlaceId: resolvedPlaceId,
+      googleUrl: resolvedUrl
+    }).where(eq(businesses.id, businessId));
 
-    const message = newReviews.length === 0 
+    const message = newRevs.length === 0 
       ? `Tutte le recensioni recenti sono già presenti. Nota: Google Places API fornisce solo le 5 recensioni più recenti.`
-      : `Sincronizzazione completata! Importate ${newReviews.length} nuove recensioni.`;
+      : `Sincronizzazione completata! Importate ${newRevs.length} nuove recensioni.`;
 
     return res.json({
       success: true,
-      count: newReviews.length,
+      count: newRevs.length,
       alreadyPresent,
-      reviews: newReviews.map(r => ({
-        id: r.id,
-        businessId: r.business_id,
-        author: r.author,
-        stars: r.stars,
-        text: r.text,
-        date: r.date,
-        status: r.status,
-        replyText: r.reply_text,
-        replyDate: r.reply_date,
-        draftText: r.draft_text
-      })),
+      reviews: newRevs,
       resolvedUrl,
       googlePlaceId: resolvedPlaceId,
       lastSyncAt,
@@ -651,40 +633,26 @@ app.post('/api/sync-google-reviews', requireAuth, rateLimiter, async (req, res) 
 });
 
 app.post('/api/request-access', async (req, res) => {
-  if (!ensureServiceKey(res)) return;
   try {
     const { name, businessName, businessType, email } = req.body;
     if (!name || !businessName || !email) {
       return res.status(400).json({ error: 'Nome, nome attività ed email sono obbligatori.' });
     }
 
-    const newRequest = {
-      id: 'req-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+    const id = 'req-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+    await db.insert(pilotRequests).values({
+      id,
       name: String(name).trim(),
-      business_name: String(businessName).trim(),
-      business_type: String(businessType || 'Altro').trim(),
+      businessName: String(businessName).trim(),
+      businessType: String(businessType || 'Altro').trim(),
       email: String(email).trim().toLowerCase(),
       status: 'in_attesa',
-      created_at: new Date().toISOString(),
       notes: 'Richiesta ricevuta da modulo Landing Page'
-    };
-
-    const { error } = await supabaseAdmin.from('pilot_requests').insert(newRequest);
-    if (error) throw error;
+    });
 
     res.json({
       success: true,
-      message: 'Richiesta registrata con successo! Ti invieremo un\'email di conferma con le credenziali di accesso.',
-      request: {
-        id: newRequest.id,
-        name: newRequest.name,
-        businessName: newRequest.business_name,
-        businessType: newRequest.business_type,
-        email: newRequest.email,
-        status: newRequest.status,
-        createdAt: newRequest.created_at,
-        notes: newRequest.notes
-      }
+      message: 'Richiesta registrata con successo! Ti invieremo un\'email di conferma con le credenziali di accesso.'
     });
   } catch (err: any) {
     console.error('Error in /api/request-access:', err);
@@ -692,123 +660,42 @@ app.post('/api/request-access', async (req, res) => {
   }
 });
 
-app.get('/api/admin/pilot-requests', requireAuth, async (req, res) => {
-  const user = (req as any).user;
-  if (!isAdminUser(user?.email)) {
+app.get('/api/admin/pilot-requests', requireAuth, async (req: AuthRequest, res) => {
+  if (!isAdminUser(req.user?.email)) {
     return res.status(403).json({ error: 'Accesso riservato agli amministratori.' });
   }
-  if (!ensureServiceKey(res)) return;
-
   try {
-    const { data, error } = await supabaseAdmin.from('pilot_requests').select('*').order('created_at', { ascending: false });
-    if (error) throw error;
-    const mapped = (data || []).map((r: any) => ({
-      id: r.id,
-      name: r.name,
-      businessName: r.business_name || r.businessName,
-      businessType: r.business_type || r.businessType,
-      email: r.email,
-      status: r.status,
-      createdAt: r.created_at || r.createdAt,
-      notes: r.notes
-    }));
-    return res.json({ requests: mapped });
+    const reqs = await db.select().from(pilotRequests).orderBy(desc(pilotRequests.createdAt));
+    return res.json({ requests: reqs });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
 });
 
-app.patch('/api/admin/pilot-requests/:id', requireAuth, async (req, res) => {
-  const user = (req as any).user;
-  if (!isAdminUser(user?.email)) {
+app.patch('/api/admin/pilot-requests/:id', requireAuth, async (req: AuthRequest, res) => {
+  if (!isAdminUser(req.user?.email)) {
     return res.status(403).json({ error: 'Accesso riservato agli amministratori.' });
   }
-  if (!ensureServiceKey(res)) return;
-
   const { id } = req.params;
   const { status, notes } = req.body;
-
-  if (!['in_attesa', 'approvato', 'rifiutato'].includes(status)) {
-    return res.status(400).json({ error: 'Stato non valido.' });
-  }
-
   try {
-    const updateObj: any = { status };
-    if (notes !== undefined) updateObj.notes = notes;
-    const { error } = await supabaseAdmin.from('pilot_requests').update(updateObj).eq('id', id);
-    if (error) throw error;
-    res.json({ success: true, status });
+    await db.update(pilotRequests).set({ status, notes }).where(eq(pilotRequests.id, id));
+    res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.post('/api/admin/create-user', requireAuth, async (req, res) => {
-  const adminUser = (req as any).user;
-  if (!isAdminUser(adminUser?.email)) {
-    return res.status(403).json({ error: 'Accesso riservato agli amministratori.' });
-  }
-  if (!ensureServiceKey(res)) return;
-
-  const { email, password, businessName, businessCategory, businessLocation } = req.body;
-
-  if (!email || !password || password.length < 6) {
-    return res.status(400).json({ error: 'Email e password (minimo 6 caratteri) sono obbligatori.' });
-  }
-
-  try {
-    const { data, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true
-    });
-    if (createError) throw createError;
-
-    const newUser = data?.user;
-    const userId = newUser?.id;
-
-    if (businessName && userId) {
-      const newBizId = 'biz-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
-      await supabaseAdmin.from('businesses').insert({
-        id: newBizId,
-        user_id: userId,
-        name: businessName,
-        category: businessCategory || 'Attività',
-        location: businessLocation || 'Ticino',
-        signer_name: 'Direzione',
-        tone: 'caloroso',
-        default_language: 'it',
-        is_connected: false,
-        sms_template: `Buongiorno {nome}, grazie per averci scelto a ${businessLocation || 'Ticino'}! Lasciaci una recensione su Google: {link}`
-      });
-    }
-
-    res.json({
-      success: true,
-      user: {
-        id: userId,
-        email: email
-      },
-      message: `Account attivato con successo per ${email}!`
-    });
-  } catch (err: any) {
-    console.error('Error in /api/admin/create-user:', err);
-    res.status(500).json({ error: err.message || 'Errore nella creazione dell\'utente.' });
-  }
-});
-
-app.get('/api/admin/config', requireAuth, async (req, res) => {
-  const user = (req as any).user;
-  if (!isAdminUser(user?.email)) {
+app.get('/api/admin/config', requireAuth, async (req: AuthRequest, res) => {
+  if (!isAdminUser(req.user?.email)) {
     return res.status(403).json({ error: 'Accesso riservato agli amministratori.' });
   }
   const signupsOpen = await getSignupsOpen();
   res.json({ signupsOpen });
 });
 
-app.post('/api/admin/config', requireAuth, async (req, res) => {
-  const user = (req as any).user;
-  if (!isAdminUser(user?.email)) {
+app.post('/api/admin/config', requireAuth, async (req: AuthRequest, res) => {
+  if (!isAdminUser(req.user?.email)) {
     return res.status(403).json({ error: 'Accesso riservato agli amministratori.' });
   }
   const { signupsOpen } = req.body;

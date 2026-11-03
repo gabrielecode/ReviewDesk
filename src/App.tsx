@@ -11,13 +11,14 @@ import { LandingPage } from './components/LandingPage';
 import { AuthScreen } from './components/AuthScreen';
 import { Business, Review, RequestItem } from './types';
 import { getAppData, saveBusiness, createBusinessInDb, getReviewsForBusinesses, getRequestsForBusinesses } from './storage';
-import { supabase, isSupabaseConfigured } from './lib/supabase';
+import { auth } from './lib/firebase';
+import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { AlertCircle, RefreshCw, Sparkles, X } from 'lucide-react';
 
 const STORAGE_KEY = 'reviewdesk.currentBusinessId';
 
 export default function App() {
-  const [session, setSession] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [authView, setAuthView] = useState<'login' | 'register' | 'forgot' | 'recovery'>('login');
 
@@ -48,53 +49,27 @@ export default function App() {
   }, [currentBusinessId]);
 
   useEffect(() => {
-    try {
-      supabase.auth.getSession().then(({ data }) => {
-        if (data?.session) {
-          setSession(data.session);
-        }
-        setAuthLoading(false);
-      }).catch((err) => {
-        console.error('Session error:', err);
-        setAuthLoading(false);
-      });
-
-      const authStateRes = supabase.auth.onAuthStateChange((event, session) => {
-        if (session) {
-          setSession(session);
-        } else {
-          setSession(null);
-        }
-        if (event === 'PASSWORD_RECOVERY') {
-          setAuthView('recovery');
-        }
-        setAuthLoading(false);
-      });
-
-      const subscription = authStateRes?.data?.subscription;
-
-      return () => {
-        subscription?.unsubscribe();
-      };
-    } catch (err) {
-      console.error('Auth setup error:', err);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user);
       setAuthLoading(false);
-    }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const handleSignOut = async () => {
     try {
-      await supabase.auth.signOut();
+      await signOut(auth);
     } catch {}
-    setSession(null);
+    setUser(null);
   };
 
   const loadData = async () => {
-    if (!session?.user?.id) return;
+    if (!auth.currentUser) return;
     setDataLoading(true);
     setDataError(null);
     try {
-      const data = await getAppData(session.user.id);
+      const data = await getAppData(auth.currentUser.uid);
       setBusinesses(data.businesses);
       setReviews(data.reviews);
       setRequests(data.requests);
@@ -105,20 +80,20 @@ export default function App() {
       }
     } catch (err: any) {
       console.error(err);
-      setDataError(err.message || 'Errore di connessione a Supabase.');
+      setDataError(err.message || 'Errore di caricamento dati dal server.');
     } finally {
       setDataLoading(false);
     }
   };
 
   useEffect(() => {
-    if (session?.user?.id) {
+    if (user) {
       loadData();
     }
-  }, [session?.user?.id]);
+  }, [user]);
 
   const handleUpdateBusiness = async (updated: Partial<Business>) => {
-    if (!currentBusiness || !session?.user?.id) return;
+    if (!currentBusiness || !user) return;
     const originalBusinesses = [...businesses];
     const updatedBusinesses = businesses.map(b => b.id === currentBusiness.id ? { ...b, ...updated } : b);
     setBusinesses(updatedBusinesses);
@@ -126,7 +101,7 @@ export default function App() {
     
     try {
       const bizToSave = updatedBusinesses.find(b => b.id === currentBusiness.id)!;
-      await saveBusiness(session.user.id, bizToSave);
+      await saveBusiness(user.uid, bizToSave);
     } catch (err: any) {
       console.error('Failed to save business update:', err);
       setBusinesses(originalBusinesses);
@@ -136,7 +111,7 @@ export default function App() {
   };
 
   const handleImportReviews = async (_newReviews: Review[], businessId: string, updatedBusinessFields?: Partial<Business>) => {
-    if (!session?.user?.id) return;
+    if (!user) return;
 
     if (updatedBusinessFields) {
       setBusinesses(prev => prev.map(b => b.id === businessId ? { ...b, ...updatedBusinessFields } : b));
@@ -156,11 +131,11 @@ export default function App() {
 
   const handleCreateBusinessSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!session?.user?.id || !newBizName.trim()) return;
+    if (!user || !newBizName.trim()) return;
 
     setIsSubmittingBiz(true);
     try {
-      const created = await createBusinessInDb(session.user.id, {
+      const created = await createBusinessInDb(user.uid, {
         name: newBizName,
         category: newBizCategory || 'Attività',
         location: newBizLocation || 'Città',
@@ -181,7 +156,7 @@ export default function App() {
   };
 
   const handleRefreshReviews = async () => {
-    if (!session?.user?.id || !currentBusinessId) return;
+    if (!user || !currentBusinessId) return;
     try {
       const fetched = await getReviewsForBusinesses([currentBusinessId]);
       setReviews(prev => {
@@ -194,7 +169,7 @@ export default function App() {
   };
 
   const handleRefreshRequests = async () => {
-    if (!session?.user?.id || !currentBusinessId) return;
+    if (!user || !currentBusinessId) return;
     try {
       const fetched = await getRequestsForBusinesses([currentBusinessId]);
       setRequests(prev => {
@@ -207,22 +182,8 @@ export default function App() {
   };
 
   const handleResetDemoData = async () => {
-    if (!session?.user?.id) return;
-    setDataLoading(true);
-    try {
-      const { resetAppData } = await import('./storage');
-      const data = await resetAppData(session.user.id);
-      setBusinesses(data.businesses);
-      setReviews(data.reviews);
-      setRequests(data.requests);
-      if (data.businesses.length > 0) {
-        setCurrentBusinessId(data.businesses[0].id);
-      }
-    } catch (err: any) {
-      alert('Errore nel ripristino dati demo: ' + err.message);
-    } finally {
-      setDataLoading(false);
-    }
+    // In this version, we don't have local demo data reset, but we could implement it
+    loadData();
   };
 
   const currentReviews = reviews.filter(r => r.businessId === currentBusiness?.id);
@@ -230,22 +191,6 @@ export default function App() {
 
   if (activeTab === 'landing') {
     return <LandingPage onOpenDashboard={() => setActiveTab('reviews')} />;
-  }
-
-  if (!isSupabaseConfigured) {
-    return (
-      <div className="min-h-screen bg-[#F6F7F5] flex items-center justify-center p-4 font-sans text-[#1C2321]">
-        <div className="max-w-md w-full panel-card p-8 space-y-4 text-center bg-white shadow-sm">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-[#B3382C]/10 text-[#B3382C] mx-auto">
-            <AlertCircle className="w-6 h-6" />
-          </div>
-          <h1 className="text-lg font-bold text-[#1C2321]">Configurazione Supabase Mancante</h1>
-          <p className="text-xs text-[#667069] leading-relaxed">
-            Per utilizzare ReviewDesk è necessario configurare le variabili d'ambiente <code className="bg-[#F6F7F5] px-1 py-0.5 rounded font-mono text-[11px]">VITE_SUPABASE_URL</code> e <code className="bg-[#F6F7F5] px-1 py-0.5 rounded font-mono text-[11px]">VITE_SUPABASE_ANON_KEY</code> nel file <code className="bg-[#F6F7F5] px-1 py-0.5 rounded font-mono text-[11px]">.env</code> o nelle impostazioni di Vercel.
-          </p>
-        </div>
-      </div>
-    );
   }
 
   if (authLoading) {
@@ -256,8 +201,8 @@ export default function App() {
     );
   }
 
-  if (!session) {
-    return <AuthScreen initialView={authView} onAuthSuccess={(sess) => setSession(sess)} />;
+  if (!user) {
+    return <AuthScreen initialView={authView} onAuthSuccess={(u) => setUser(u)} />;
   }
 
   if (dataLoading && businesses.length === 0) {
@@ -265,7 +210,7 @@ export default function App() {
       <div className="min-h-screen bg-[#F6F7F5] flex items-center justify-center font-sans text-[#1C2321]">
         <div className="text-center space-y-2">
           <RefreshCw className="w-6 h-6 animate-spin text-[#1F5F4A] mx-auto" />
-          <p className="text-xs text-[#667069]">Caricamento dati da Supabase...</p>
+          <p className="text-xs text-[#667069]">Caricamento dati dal server...</p>
         </div>
       </div>
     );
@@ -362,32 +307,13 @@ export default function App() {
             </button>
           </form>
 
-          <div className="pt-2 space-y-3">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-[#E5E7E3]"></span>
-              </div>
-              <div className="relative flex justify-center text-[10px] uppercase tracking-wider">
-                <span className="bg-white px-2 text-[#667069] font-medium">Oppure</span>
-              </div>
-            </div>
-
+          <div className="pt-2 space-y-3 text-center">
             <button
-              onClick={handleResetDemoData}
-              className="w-full py-2 px-4 border border-[#1F5F4A]/30 text-[#1F5F4A] rounded-[6px] text-xs font-medium hover:bg-[#E8F0EC] transition flex items-center justify-center gap-2"
+              onClick={handleSignOut}
+              className="text-xs text-[#B3382C] font-medium hover:underline"
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              Esplora con dati demo di prova
+              Esci dall'account
             </button>
-
-            <div className="text-center pt-2">
-              <button
-                onClick={handleSignOut}
-                className="text-xs text-[#B3382C] font-medium hover:underline"
-              >
-                Esci dall'account
-              </button>
-            </div>
           </div>
         </div>
       </div>
@@ -405,7 +331,7 @@ export default function App() {
         onResetData={handleResetDemoData}
         onClearDemoData={() => loadData()}
         onOpenConnectionModal={() => setIsConnectionModalOpen(true)}
-        userEmail={session.user.email}
+        userEmail={user.email || ''}
         onSignOut={handleSignOut}
         onAddBusiness={() => setShowAddBusinessModal(true)}
       />
@@ -468,7 +394,7 @@ export default function App() {
           )}
 
           {activeTab === 'admin_access' && (
-            <AdminAccessTab userEmail={session?.user?.email || ''} />
+            <AdminAccessTab userEmail={user.email || ''} />
           )}
         </div>
 

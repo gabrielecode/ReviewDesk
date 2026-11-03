@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { auth, googleAuthProvider } from '../lib/firebase';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signInWithPopup } from 'firebase/auth';
 import { MessageSquare, Lock, Mail, ArrowRight, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react';
 
 interface AuthScreenProps {
   initialView?: 'login' | 'register' | 'forgot' | 'recovery';
-  onAuthSuccess?: (session: any) => void;
+  onAuthSuccess?: (user: any) => void;
 }
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login', onAuthSuccess }) => {
@@ -15,6 +16,19 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login', o
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await signInWithPopup(auth, googleAuthProvider);
+      if (onAuthSuccess) onAuthSuccess(result.user);
+    } catch (err: any) {
+      setError(err.message || 'Errore durante l\'accesso con Google');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,52 +58,14 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login', o
 
     try {
       if (view === 'login') {
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: normEmail, password })
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || 'Credenziali non valide');
-        }
-        if (data?.session) {
-          await supabase.auth.setSession(data.session);
-          if (onAuthSuccess) {
-            onAuthSuccess(data.session);
-          } else {
-            window.location.reload();
-          }
-        }
+        const result = await signInWithEmailAndPassword(auth, normEmail, password);
+        if (onAuthSuccess) onAuthSuccess(result.user);
       } else if (view === 'register') {
-        const res = await fetch('/api/auth/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: normEmail, password })
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || 'Errore durante la registrazione');
-        }
-        if (data?.session) {
-          await supabase.auth.setSession(data.session);
-          if (onAuthSuccess) {
-            onAuthSuccess(data.session);
-          } else {
-            window.location.reload();
-          }
-        }
+        const result = await createUserWithEmailAndPassword(auth, normEmail, password);
+        if (onAuthSuccess) onAuthSuccess(result.user);
       } else if (view === 'forgot') {
-        const { error } = await supabase.auth.resetPasswordForEmail(normEmail, {
-          redirectTo: window.location.origin + '/app'
-        });
-        if (error) throw error;
+        await sendPasswordResetEmail(auth, normEmail);
         setSuccessMessage('Ti abbiamo inviato un\'email con le istruzioni per reimpostare la password.');
-      } else if (view === 'recovery') {
-        const { error } = await supabase.auth.updateUser({ password });
-        if (error) throw error;
-        setSuccessMessage('Password aggiornata con successo! Effettua l\'accesso.');
-        setTimeout(() => setView('login'), 2000);
       }
     } catch (err: any) {
       console.error(err);
@@ -155,84 +131,104 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login', o
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-[#667069] block">Indirizzo email</label>
-            <div className="relative">
-              <Mail className="w-4 h-4 text-[#667069] absolute left-3 top-3" />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="nome@azienda.ch"
-                className="input-field w-full text-xs pl-9 py-2.5"
-                disabled={view === 'recovery'}
-              />
+        <div className="space-y-4">
+          <button
+            onClick={handleGoogleLogin}
+            disabled={loading}
+            className="w-full py-2.5 px-4 border border-[#E5E7E3] rounded-[6px] bg-white text-xs font-medium text-[#1C2321] hover:bg-[#F6F7F5] transition flex items-center justify-center gap-2"
+          >
+            <img src="https://www.google.com/favicon.ico" className="w-4 h-4" alt="Google" />
+            Continua con Google
+          </button>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-[#E5E7E3]"></span>
+            </div>
+            <div className="relative flex justify-center text-[10px] uppercase">
+              <span className="bg-white px-2 text-[#667069]">Oppure email</span>
             </div>
           </div>
 
-          {view !== 'forgot' && (
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-medium text-[#667069]">
-                  {view === 'recovery' ? 'Nuova password' : 'Password'}
-                </label>
-                {view === 'login' && (
-                  <button
-                    type="button"
-                    onClick={() => { setView('forgot'); setError(null); setSuccessMessage(null); }}
-                    className="text-[11px] text-[#1F5F4A] hover:underline"
-                  >
-                    Password dimenticata?
-                  </button>
-                )}
-              </div>
+              <label className="text-xs font-medium text-[#667069] block">Indirizzo email</label>
               <div className="relative">
-                <Lock className="w-4 h-4 text-[#667069] absolute left-3 top-3" />
+                <Mail className="w-4 h-4 text-[#667069] absolute left-3 top-3" />
                 <input
-                  type="password"
+                  type="email"
                   required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Minimo 6 caratteri"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="nome@azienda.ch"
                   className="input-field w-full text-xs pl-9 py-2.5"
+                  disabled={view === 'recovery'}
                 />
               </div>
             </div>
-          )}
 
-          {view === 'register' && (
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-[#667069] block">Conferma password</label>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-[#667069] absolute left-3 top-3" />
-                <input
-                  type="password"
-                  required
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Ripeti la password"
-                  className="input-field w-full text-xs pl-9 py-2.5"
-                />
+            {view !== 'forgot' && (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-[#667069]">
+                    {view === 'recovery' ? 'Nuova password' : 'Password'}
+                  </label>
+                  {view === 'login' && (
+                    <button
+                      type="button"
+                      onClick={() => { setView('forgot'); setError(null); setSuccessMessage(null); }}
+                      className="text-[11px] text-[#1F5F4A] hover:underline"
+                    >
+                      Password dimenticata?
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-[#667069] absolute left-3 top-3" />
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Minimo 6 caratteri"
+                    className="input-field w-full text-xs pl-9 py-2.5"
+                  />
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn-primary w-full py-2.5 text-xs font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            <span>
-              {loading ? 'Attendere...' :
-               view === 'login' ? 'Accedi' :
-               view === 'register' ? 'Crea account' :
-               view === 'forgot' ? 'Invia link di recupero' : 'Aggiorna password'}
-            </span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </form>
+            {view === 'register' && (
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-[#667069] block">Conferma password</label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-[#667069] absolute left-3 top-3" />
+                  <input
+                    type="password"
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Ripeti la password"
+                    className="input-field w-full text-xs pl-9 py-2.5"
+                  />
+                </div>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn-primary w-full py-2.5 text-xs font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <span>
+                {loading ? 'Attendere...' :
+                 view === 'login' ? 'Accedi' :
+                 view === 'register' ? 'Crea account' :
+                 view === 'forgot' ? 'Invia link di recupero' : 'Aggiorna password'}
+              </span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </form>
+        </div>
 
         {view === 'forgot' && (
           <div className="text-center pt-2">

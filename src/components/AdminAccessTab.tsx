@@ -17,7 +17,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { PilotRequest } from '../types';
-import { supabase } from '../lib/supabase';
+import { auth, getAuthToken } from '../lib/firebase';
 
 interface AdminAccessTabProps {
   userEmail: string;
@@ -60,8 +60,7 @@ export const AdminAccessTab: React.FC<AdminAccessTabProps> = ({ userEmail }) => 
     setLoadingRequests(true);
     setRequestsError(null);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const token = await getAuthToken();
 
       const res = await fetch('/api/admin/pilot-requests', {
         headers: {
@@ -85,8 +84,7 @@ export const AdminAccessTab: React.FC<AdminAccessTabProps> = ({ userEmail }) => 
 
   const fetchConfig = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const token = await getAuthToken();
       const res = await fetch('/api/admin/config', {
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
       });
@@ -100,8 +98,7 @@ export const AdminAccessTab: React.FC<AdminAccessTabProps> = ({ userEmail }) => 
   const handleToggleSignups = async () => {
     setUpdatingSettings(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const token = await getAuthToken();
       const nextState = !signupsOpen;
 
       const res = await fetch('/api/admin/config', {
@@ -125,8 +122,7 @@ export const AdminAccessTab: React.FC<AdminAccessTabProps> = ({ userEmail }) => 
 
   const handleUpdateStatus = async (id: string, newStatus: 'in_attesa' | 'approvato' | 'rifiutato') => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const token = await getAuthToken();
 
       await fetch(`/api/admin/pilot-requests/${id}`, {
         method: 'PATCH',
@@ -155,8 +151,7 @@ export const AdminAccessTab: React.FC<AdminAccessTabProps> = ({ userEmail }) => 
     setIsCreatingUser(true);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const token = await getAuthToken();
 
       const res = await fetch('/api/admin/create-user', {
         method: 'POST',
@@ -212,8 +207,7 @@ export const AdminAccessTab: React.FC<AdminAccessTabProps> = ({ userEmail }) => 
 
     setIsCreatingUser(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const token = await getAuthToken();
 
       const res = await fetch('/api/admin/create-user', {
         method: 'POST',

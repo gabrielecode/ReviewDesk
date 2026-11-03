@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { Review, Business } from '../types';
 import { updateReviewInDb } from '../storage';
-import { getAuthToken } from '../lib/supabase';
+import { getAuthToken } from '../lib/firebase';
 
 interface ReviewsTabProps {
   business: Business;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Business } from '../types';
-import { supabase, getAuthToken } from '../lib/supabase';
+import { auth, getAuthToken } from '../lib/firebase';
 import { AlertTriangle, RefreshCw, ExternalLink, CheckCircle2, Eye, EyeOff, Database, Trash2, AlertCircle } from 'lucide-react';
 
 interface SettingsTabProps {
@@ -158,9 +158,8 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
     setDeleteError(null);
 
     try {
-      const { error } = await supabase.rpc('delete_my_account');
-      if (error) throw error;
-      await supabase.auth.signOut();
+      await auth.currentUser?.delete();
+      await auth.signOut();
       window.location.reload();
     } catch (err: any) {
       console.error(err);

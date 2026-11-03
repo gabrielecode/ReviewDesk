@@ -9,7 +9,7 @@ import {
   CartesianGrid 
 } from 'recharts';
 import { Business, Review, InsightsData } from '../types';
-import { getAuthToken } from '../lib/supabase';
+import { getAuthToken } from '../lib/firebase';
 
 interface StatsTabProps {
   business: Business;
