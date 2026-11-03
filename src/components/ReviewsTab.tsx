@@ -74,16 +74,17 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
           setSyncBannerMsg(data.message || 'Nessuna recensione trovata.');
         }
       } else {
+        const errData = await res.json().catch(() => ({}));
         onRefreshReviews();
-        setSyncBannerMsg('Errore durante la sincronizzazione.');
+        setSyncBannerMsg(errData.error || errData.message || 'Errore server durante la sincronizzazione.');
       }
     } catch (err: any) {
-      console.error(err);
+      console.error('Sync error:', err);
       onRefreshReviews();
-      setSyncBannerMsg('Sincronizzazione completata!');
+      setSyncBannerMsg(`Errore: ${err.message || 'Impossibile completare la sincronizzazione.'}`);
     } finally {
       setIsSyncingReviews(false);
-      setTimeout(() => setSyncBannerMsg(null), 5000);
+      setTimeout(() => setSyncBannerMsg(null), 8000);
     }
   };
 

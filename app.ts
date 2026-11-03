@@ -573,16 +573,14 @@ app.post('/api/sync-google-reviews', requireAuth, rateLimiter, async (req, res) 
 
     if (importedReviews.length === 0) {
       const msg = (!resolvedPlaceId || !mapsApiKey)
-        ? 'Impossibile importare recensioni reali: inserisci un Google Place ID valido e una Chiave API Google Maps (con Places API abilitata) nelle impostazioni dell\'attività.'
-        : 'Nessuna recensione trovata su Google Places per questo Place ID o chiave API non valida.';
+        ? 'Configurazione incompleta: assicurati di aver inserito il Google Place ID e la Chiave API Google Maps (con Places API abilitata) nelle impostazioni.'
+        : `Nessuna recensione trovata per l'attività "${resolvedName}" (Place ID: ${resolvedPlaceId}).`;
 
-      return res.json({
+      console.warn('Sync failed:', msg);
+      return res.status(400).json({
         success: false,
         count: 0,
         reviews: [],
-        resolvedUrl: finalUrl,
-        googlePlaceId: resolvedPlaceId,
-        lastSyncAt: new Date().toISOString(),
         message: msg
       });
     }
@@ -626,8 +624,12 @@ app.post('/api/sync-google-reviews', requireAuth, rateLimiter, async (req, res) 
       message: `Sincronizzazione completata con successo! Importate ${mappedReviews.length} recensioni per ${resolvedName}.`
     });
   } catch (err: any) {
-    console.error('Error in /api/sync-google-reviews:', err);
-    return res.status(500).json({ error: err.message || 'Errore durante la sincronizzazione delle recensioni Google.' });
+    console.error('CRITICAL Error in /api/sync-google-reviews:', err);
+    return res.status(500).json({ 
+      success: false,
+      error: err.message || 'Errore interno durante la sincronizzazione.',
+      details: err.stack || 'No details'
+    });
   }
 });
 

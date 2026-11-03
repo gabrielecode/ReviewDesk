@@ -128,6 +128,14 @@ export default function App() {
       setBusinesses(updatedBusinesses);
     }
 
+    if (newReviews.length === 0) {
+      // If no new reviews, only update business if needed
+      if (updatedBusinessFields) {
+        await handleUpdateBusiness(updatedBusinessFields);
+      }
+      return;
+    }
+
     const otherReviews = reviews.filter(
       r => r.businessId !== businessId || (!r.id.includes('-rev-') && !r.id.includes('-hist-') && !r.id.includes('g-rev-'))
     );
@@ -138,11 +146,15 @@ export default function App() {
 
     setReviews(combinedReviews);
 
-    await saveAppData(session.user.id, {
-      businesses: updatedBusinesses,
-      reviews: combinedReviews,
-      requests
-    });
+    try {
+      await saveAppData(session.user.id, {
+        businesses: updatedBusinesses,
+        reviews: combinedReviews,
+        requests
+      });
+    } catch (err) {
+      console.error('Failed to save imported reviews:', err);
+    }
   };
 
   const handleCreateBusinessSubmit = async (e: React.FormEvent) => {
