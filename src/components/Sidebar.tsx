@@ -10,7 +10,8 @@ import {
   Plus,
   LogOut,
   Users,
-  Shield
+  Shield,
+  Trash2
 } from 'lucide-react';
 import { Business } from '../types';
 
@@ -21,6 +22,7 @@ interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onResetData: () => void;
+  onClearDemoData?: () => void;
   onOpenConnectionModal: () => void;
   userEmail?: string;
   onSignOut: () => void;
@@ -34,6 +36,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   setActiveTab,
   onResetData,
+  onClearDemoData,
   onOpenConnectionModal,
   userEmail,
   onSignOut,
@@ -171,6 +174,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="px-2 py-1 text-[11px] text-[#667069] truncate" title={userEmail}>
               <span className="font-medium text-[#1C2321] block truncate">{userEmail}</span>
             </div>
+          )}
+          {onClearDemoData && (
+            <button
+              onClick={onClearDemoData}
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-[6px] hover:bg-[#B3382C]/10 text-[#B3382C] text-[11px] transition font-medium"
+            >
+              <Trash2 className="w-3 h-3" />
+              Elimina dati demo
+            </button>
           )}
           <button
             onClick={onResetData}

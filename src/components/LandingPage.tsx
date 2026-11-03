@@ -61,8 +61,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenDashboard }) => 
                 </button>
               </li>
               <li>
-                <a href="#richiesta" className="bg-[#1F5F4A] text-white hover:bg-[#174A39] px-3.5 py-2 rounded-[6px] font-semibold text-[15px] transition">
-                  Richiedi l’accesso
+                <a href="#richiestaForm" className="bg-[#1F5F4A] text-white hover:bg-[#174A39] px-3.5 py-2 rounded-[6px] font-semibold text-[15px] transition">
+                  Iscriviti gratis
                 </a>
               </li>
             </ul>
@@ -74,8 +74,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenDashboard }) => 
             >
               Dashboard
             </button>
-            <a href="#richiesta" className="bg-[#1F5F4A] text-white px-3 py-1.5 rounded-[6px] text-xs font-semibold">
-              Pilota
+            <a href="#richiestaForm" className="bg-[#1F5F4A] text-white px-3 py-1.5 rounded-[6px] text-xs font-semibold">
+              Iscriviti
             </a>
           </div>
         </div>
@@ -135,10 +135,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenDashboard }) => 
               </figure>
             </div>
 
-            {/* Pilot Request Form */}
-            <form onSubmit={handleSubmit} className="bg-white border border-[#E2E5E0] rounded-[8px] p-6 shadow-sm sticky top-20" id="richiesta">
-              <h2 className="text-[22px] font-bold mb-2">Richiedi l’accesso pilota</h2>
-              <p className="text-[13px] text-[#586159] mb-4">Compila il modulo: ti rispondiamo entro un giorno lavorativo.</p>
+            {/* Registration Request Form */}
+            <form onSubmit={handleSubmit} className="bg-white border border-[#E2E5E0] rounded-[8px] p-6 shadow-sm sticky top-20" id="richiestaForm">
+              <h2 className="text-[22px] font-bold mb-2">Iscriviti e registrati gratis</h2>
+              <p className="text-[13px] text-[#586159] mb-4">Compila il modulo: attiviamo la tua prova gratuita entro un giorno lavorativo.</p>
 
               <label htmlFor="nome" className="block text-[14px] font-semibold mb-1 mt-3">Nome e cognome</label>
               <input 
@@ -197,11 +197,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenDashboard }) => 
                   required
                   className="mt-1"
                 />
-                <span>Accetto che mi contattiate per l’accesso pilota. Userete i miei dati solo per rispondermi.</span>
+                <span>Accetto che mi contattiate per l'iscrizione gratuita. Userete i miei dati solo per rispondermi.</span>
               </label>
 
               <button type="submit" className="w-full mt-5 bg-[#1F5F4A] hover:bg-[#174A39] text-white font-semibold py-3 px-5 rounded-[6px] text-[16px] transition cursor-pointer">
-                Richiedi l’accesso pilota
+                Iscriviti gratis
               </button>
 
               {esito && <p id="esito" className="font-semibold text-[#1F5F4A] text-sm mt-3" role="status">{esito}</p>}
@@ -334,10 +334,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenDashboard }) => 
         {/* CTA Banner */}
         <section className="bg-[#1F5F4A] text-white py-14 text-center">
           <div className="max-w-[1080px] mx-auto px-5">
-            <h2 className="text-[28px] md:text-[32px] font-bold mb-3 text-white">Inizia con il pilota gratuito</h2>
-            <p className="text-[#D6E6DE] text-[17px] max-w-[34em] mx-auto mb-6 leading-relaxed">Poche attività ticinesi alla volta, seguite da vicino. Lascia i tuoi dati e ti scriviamo entro un giorno lavorativo.</p>
-            <a href="#richiesta" className="bg-white text-[#1F5F4A] hover:bg-[#E8F0EC] font-semibold py-3.5 px-6 rounded-[6px] text-[16px] inline-block transition">
-              Richiedi l’accesso pilota
+            <h2 className="text-[28px] md:text-[32px] font-bold mb-3 text-white">Inizia subito la tua prova gratuita</h2>
+            <p className="text-[#D6E6DE] text-[17px] max-w-[34em] mx-auto mb-6 leading-relaxed">Iscriviti senza impegno. Lascia i tuoi dati e ti attiviamo l'account entro un giorno lavorativo.</p>
+            <a href="#richiestaForm" className="bg-white text-[#1F5F4A] hover:bg-[#E8F0EC] font-semibold py-3.5 px-6 rounded-[6px] text-[16px] inline-block transition">
+              Iscriviti e registrati gratis
             </a>
           </div>
         </section>

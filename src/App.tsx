@@ -10,7 +10,7 @@ import { Footer } from './components/Footer';
 import { LandingPage } from './components/LandingPage';
 import { AuthScreen } from './components/AuthScreen';
 import { Business, Review, RequestItem } from './types';
-import { getAppData, saveAppData, resetAppData, createBusinessInDb, loadDemoDataToDb } from './storage';
+import { getAppData, saveAppData, resetAppData, clearDemoData, createBusinessInDb, loadDemoDataToDb } from './storage';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { MessageSquare, Plus, RefreshCw, AlertCircle, Sparkles } from 'lucide-react';
 
@@ -127,6 +127,31 @@ export default function App() {
       await saveAppData(session.user.id, { businesses: updatedBusinesses, reviews, requests });
     } catch (err) {
       console.error('Failed to save business update:', err);
+    }
+  };
+
+  const handleClearDemoData = async () => {
+    if (!session?.user?.id) return;
+    if (!confirm('Eliminare i dati demo fittizi? Verranno rimossi i profili e le recensioni fittizie di prova.')) return;
+
+    setDataLoading(true);
+    try {
+      const cleanData = await clearDemoData(session.user.id);
+      setBusinesses(cleanData.businesses);
+      setReviews(cleanData.reviews);
+      setRequests(cleanData.requests);
+      if (cleanData.businesses.length > 0) {
+        if (!cleanData.businesses.some(b => b.id === currentBusinessId)) {
+          setCurrentBusinessId(cleanData.businesses[0].id);
+        }
+      } else {
+        setCurrentBusinessId('');
+      }
+      alert('Dati demo eliminati con successo!');
+    } catch (err: any) {
+      alert('Errore durante l\'eliminazione dei dati demo: ' + (err.message || err));
+    } finally {
+      setDataLoading(false);
     }
   };
 
@@ -388,6 +413,7 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onResetData={handleResetData}
+        onClearDemoData={handleClearDemoData}
         onOpenConnectionModal={() => setIsConnectionModalOpen(true)}
         userEmail={session.user.email}
         onSignOut={handleSignOut}
@@ -428,6 +454,9 @@ export default function App() {
               key={currentBusiness.id}
               business={currentBusiness}
               onUpdateBusiness={handleUpdateBusiness}
+              onRefreshReviews={handleRefreshReviews}
+              onClearDemoData={handleClearDemoData}
+              onResetData={handleResetData}
             />
           )}
 
@@ -444,6 +473,7 @@ export default function App() {
         onClose={() => setIsConnectionModalOpen(false)}
         business={currentBusiness}
         onUpdateBusiness={handleUpdateBusiness}
+        onRefreshReviews={handleRefreshReviews}
         onNavigateToSettings={() => {
           setIsConnectionModalOpen(false);
           setActiveTab('settings');

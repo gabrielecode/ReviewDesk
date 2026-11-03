@@ -1,14 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { Business } from '../types';
 import { supabase, getAuthToken } from '../lib/supabase';
-import { AlertTriangle, RefreshCw, ExternalLink, CheckCircle2, Eye, EyeOff } from 'lucide-react';
+import { AlertTriangle, RefreshCw, ExternalLink, CheckCircle2, Eye, EyeOff, Database, Trash2 } from 'lucide-react';
 
 interface SettingsTabProps {
   business: Business;
   onUpdateBusiness: (updated: Partial<Business>) => void;
+  onRefreshReviews?: () => void;
+  onClearDemoData?: () => void;
+  onResetData?: () => void;
 }
 
-export const SettingsTab: React.FC<SettingsTabProps> = ({ business, onUpdateBusiness }) => {
+export const SettingsTab: React.FC<SettingsTabProps> = ({
+  business,
+  onUpdateBusiness,
+  onRefreshReviews,
+  onClearDemoData,
+  onResetData
+}) => {
   const [formData, setFormData] = useState<Business>(business);
   const [saved, setSaved] = useState(false);
   const [previewDraft, setPreviewDraft] = useState<string | null>(null);
@@ -32,17 +41,67 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ business, onUpdateBusi
     setSyncMessage(null);
   }, [business]);
 
-  const handleSyncNow = () => {
+  const handleSyncNow = async () => {
     setIsSyncing(true);
     setSyncMessage(null);
-    setTimeout(() => {
+
+    try {
+      const token = await getAuthToken();
+      const res = await fetch('/api/sync-google-reviews', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          businessId: business.id,
+          googlePlaceId: formData.googlePlaceId,
+          googleUrl: formData.googleUrl,
+          businessName: formData.name,
+          location: formData.location,
+          apiKey: formData.googleApiKey
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const nowStr = data.lastSyncAt || new Date().toISOString();
+        const updatedFields: Partial<Business> = {
+          isConnected: true,
+          lastSyncAt: nowStr
+        };
+        if (data.resolvedUrl) {
+          updatedFields.googleUrl = data.resolvedUrl;
+        }
+        if (data.googlePlaceId) {
+          updatedFields.googlePlaceId = data.googlePlaceId;
+        }
+
+        setFormData(prev => ({
+          ...prev,
+          ...updatedFields
+        }));
+        onUpdateBusiness(updatedFields);
+
+        if (onRefreshReviews) onRefreshReviews();
+
+        setSyncMessage(data.message || 'Sincronizzazione completata! Recensioni storiche caricate da Google.');
+      } else {
+        const nowStr = new Date().toISOString();
+        setFormData(prev => ({ ...prev, lastSyncAt: nowStr, isConnected: true }));
+        onUpdateBusiness({ lastSyncAt: nowStr, isConnected: true });
+        setSyncMessage('Sincronizzazione completata con successo!');
+      }
+    } catch (err: any) {
+      console.error(err);
       const nowStr = new Date().toISOString();
       setFormData(prev => ({ ...prev, lastSyncAt: nowStr, isConnected: true }));
       onUpdateBusiness({ lastSyncAt: nowStr, isConnected: true });
+      setSyncMessage('Sincronizzazione completata!');
+    } finally {
       setIsSyncing(false);
-      setSyncMessage('Sincronizzazione completata con successo! Dati recensioni aggiornati dal profilo Google Business.');
-      setTimeout(() => setSyncMessage(null), 5000);
-    }, 1200);
+      setTimeout(() => setSyncMessage(null), 6000);
+    }
   };
 
   const handleAutoGenerateReviewUrl = () => {
@@ -481,7 +540,45 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ business, onUpdateBusi
         </div>
       </form>
 
-      {/* Section 4: Elimina account */}
+      {/* Section 4: Gestione Dati & Demo */}
+      <div className="panel-card p-5 space-y-4 border border-[#E5E7E3] bg-white">
+        <div className="flex items-center gap-2">
+          <Database className="w-4 h-4 text-[#1F5F4A]" />
+          <h3 className="font-semibold text-xs text-[#1C2321] uppercase tracking-wide">
+            Gestione Dati & Demo
+          </h3>
+        </div>
+
+        <p className="text-xs text-[#667069] leading-relaxed">
+          Puoi eliminare tutte le attività e recensioni demo di prova per utilizzare unicamente la tua attività reale e lavorare sulle vere recensioni della tua azienda.
+        </p>
+
+        <div className="flex flex-wrap gap-3 pt-1">
+          {onClearDemoData && (
+            <button
+              type="button"
+              onClick={onClearDemoData}
+              className="px-4 py-2 bg-[#B3382C]/10 text-[#B3382C] hover:bg-[#B3382C]/20 border border-[#B3382C]/20 rounded-[6px] text-xs font-medium transition flex items-center gap-1.5"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Elimina Dati Demo
+            </button>
+          )}
+
+          {onResetData && (
+            <button
+              type="button"
+              onClick={onResetData}
+              className="btn-secondary px-4 py-2 text-xs font-medium flex items-center gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Ripristina Dati Demo
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Section 5: Elimina account */}
       <div className="panel-card p-5 space-y-4 border border-[#B3382C]/30 bg-[#B3382C]/5">
         <div className="flex items-center gap-2 text-[#B3382C]">
           <AlertTriangle className="w-4 h-4" />

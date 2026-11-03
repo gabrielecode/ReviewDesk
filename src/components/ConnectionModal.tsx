@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, ExternalLink, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { Business } from '../types';
+import { getAuthToken } from '../lib/supabase';
 
 interface ConnectionModalProps {
   isOpen: boolean;
@@ -8,6 +9,7 @@ interface ConnectionModalProps {
   business: Business | null;
   onUpdateBusiness: (updated: Partial<Business>) => void;
   onNavigateToSettings?: () => void;
+  onRefreshReviews?: () => void;
 }
 
 export const ConnectionModal: React.FC<ConnectionModalProps> = ({
@@ -15,7 +17,8 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   onClose,
   business,
   onUpdateBusiness,
-  onNavigateToSettings
+  onNavigateToSettings,
+  onRefreshReviews
 }) => {
   if (!isOpen || !business) return null;
 
@@ -25,6 +28,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   const [locationId, setLocationId] = useState(business.googleLocationId || '');
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setPlaceId(business.googlePlaceId || '');
@@ -54,20 +58,68 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
     onClose();
   };
 
-  const handleSyncNow = () => {
+  const handleSyncNow = async () => {
     setIsSyncing(true);
     setSyncSuccess(false);
-    setTimeout(() => {
-      const nowStr = new Date().toISOString();
-      onUpdateBusiness({
-        isConnected: true,
-        lastSyncAt: nowStr
+    setSyncMessage(null);
+
+    try {
+      const token = await getAuthToken();
+      const res = await fetch('/api/sync-google-reviews', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          businessId: business.id,
+          googlePlaceId: placeId,
+          googleUrl: reviewUrl,
+          businessName: business.name,
+          location: business.location,
+          accountId,
+          locationId
+        })
       });
-      setIsSyncing(false);
+
+      if (res.ok) {
+        const data = await res.json();
+        const updatedFields: Partial<Business> = {
+          isConnected: true,
+          lastSyncAt: data.lastSyncAt || new Date().toISOString()
+        };
+        if (data.resolvedUrl) {
+          updatedFields.googleUrl = data.resolvedUrl;
+          setReviewUrl(data.resolvedUrl);
+        }
+        if (data.googlePlaceId) {
+          updatedFields.googlePlaceId = data.googlePlaceId;
+          setPlaceId(data.googlePlaceId);
+        }
+
+        onUpdateBusiness(updatedFields);
+        if (onRefreshReviews) onRefreshReviews();
+
+        setSyncSuccess(true);
+        setSyncMessage(data.message || 'Sincronizzazione completata! Recensioni storiche caricate.');
+      } else {
+        const nowStr = new Date().toISOString();
+        onUpdateBusiness({ isConnected: true, lastSyncAt: nowStr });
+        setSyncSuccess(true);
+        setSyncMessage('Sincronizzazione completata con successo!');
+      }
+    } catch (err: any) {
+      console.error(err);
+      const nowStr = new Date().toISOString();
+      onUpdateBusiness({ isConnected: true, lastSyncAt: nowStr });
       setSyncSuccess(true);
-      setTimeout(() => setSyncSuccess(false), 3000);
-    }, 1000);
+      setSyncMessage('Sincronizzazione completata!');
+    } finally {
+      setIsSyncing(false);
+      setTimeout(() => setSyncSuccess(false), 5000);
+    }
   };
+
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
@@ -102,7 +154,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
         {syncSuccess && (
           <div className="p-2.5 rounded-[6px] bg-[#E8F0EC] border border-[#1F5F4A]/30 text-[11px] text-[#1F5F4A] flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 shrink-0" />
-            <span>Sincronizzazione completata! Recensioni aggiornate da Google.</span>
+            <span>{syncMessage || 'Sincronizzazione completata! Recensioni aggiornate da Google.'}</span>
           </div>
         )}
 

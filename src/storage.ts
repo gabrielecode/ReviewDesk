@@ -456,6 +456,41 @@ export async function loadDemoDataToDb(userId: string): Promise<AppData> {
   return fullData;
 }
 
+export async function clearDemoData(userId: string): Promise<AppData> {
+  const cacheKey = `reviewdesk_data_${userId}`;
+
+  try {
+    const demoBizIds = initialDemoBusinesses.map(b => b.id);
+    await supabase.from('reviews').delete().in('business_id', demoBizIds);
+    await supabase.from('requests').delete().in('business_id', demoBizIds);
+    await supabase.from('businesses').delete().in('id', demoBizIds);
+
+    // Remove any review/request with demo ID patterns
+    await supabase.from('reviews').delete().like('id', '%-rev-%');
+    await supabase.from('requests').delete().like('id', '%-req-%');
+  } catch (err) {
+    console.warn('Supabase clear demo error:', err);
+  }
+
+  const cachedStr = localStorage.getItem(cacheKey);
+  let current: AppData = { businesses: [], reviews: [], requests: [] };
+  if (cachedStr) {
+    try {
+      current = JSON.parse(cachedStr);
+    } catch {}
+  }
+
+  const demoIdsSet = new Set(initialDemoBusinesses.map(b => b.id));
+  current.businesses = (current.businesses || []).filter(
+    b => !demoIdsSet.has(b.id) && !b.id.startsWith('osteria-demo') && !b.id.startsWith('salone-demo') && !b.id.startsWith('studio-demo')
+  );
+  current.reviews = (current.reviews || []).filter(r => !r.id.includes('-rev-'));
+  current.requests = (current.requests || []).filter(req => !req.id.includes('-req-'));
+
+  localStorage.setItem(cacheKey, JSON.stringify(current));
+  return current;
+}
+
 export async function resetAppData(userId: string): Promise<AppData> {
   const cacheKey = `reviewdesk_data_${userId}`;
   localStorage.removeItem(cacheKey);
@@ -483,3 +518,4 @@ export async function deleteMyAccount() {
   localStorage.clear();
   return { success: true };
 }
+

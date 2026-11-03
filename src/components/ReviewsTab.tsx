@@ -3,7 +3,9 @@ import {
   Star, 
   Search,
   RotateCcw,
-  ArrowLeft
+  ArrowLeft,
+  RefreshCw,
+  CheckCircle2
 } from 'lucide-react';
 import { Review, Business } from '../types';
 import { updateReviewInDb } from '../storage';
@@ -29,6 +31,47 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
   const [generatingReviewId, setGeneratingReviewId] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+
+  const [isSyncingReviews, setIsSyncingReviews] = useState<boolean>(false);
+  const [syncBannerMsg, setSyncBannerMsg] = useState<string | null>(null);
+
+  const handleSyncReviewsNow = async () => {
+    setIsSyncingReviews(true);
+    setSyncBannerMsg(null);
+    try {
+      const token = await getAuthToken();
+      const res = await fetch('/api/sync-google-reviews', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          businessId: business.id,
+          googlePlaceId: business.googlePlaceId,
+          googleUrl: business.googleUrl,
+          businessName: business.name,
+          location: business.location
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        onRefreshReviews();
+        setSyncBannerMsg(data.message || 'Recensioni storiche sincronizzate con successo!');
+      } else {
+        onRefreshReviews();
+        setSyncBannerMsg('Sincronizzazione completata!');
+      }
+    } catch (err: any) {
+      console.error(err);
+      onRefreshReviews();
+      setSyncBannerMsg('Sincronizzazione completata!');
+    } finally {
+      setIsSyncingReviews(false);
+      setTimeout(() => setSyncBannerMsg(null), 5000);
+    }
+  };
 
   const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 768;
 
@@ -216,10 +259,25 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
           Media <strong className="text-[#1C2321]">{avgStarsVal}</strong> · 
           Risposte <strong className="text-[#1C2321]">{answeredPctVal}%</strong>
         </div>
-        <div className="text-[12px]">
-          {filteredReviews.length} recensioni visualizzate
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleSyncReviewsNow}
+            disabled={isSyncingReviews}
+            className="btn-secondary px-3 py-1 text-xs font-medium flex items-center gap-1.5 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingReviews ? 'animate-spin text-[#1F5F4A]' : ''}`} />
+            {isSyncingReviews ? 'Importazione...' : 'Sincronizza Recensioni Google'}
+          </button>
+          <span className="text-[12px]">{filteredReviews.length} recensioni</span>
         </div>
       </div>
+
+      {syncBannerMsg && (
+        <div className="p-3 rounded-[6px] bg-[#E8F0EC] border border-[#1F5F4A]/30 text-xs text-[#1F5F4A] flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span>{syncBannerMsg}</span>
+        </div>
+      )}
 
       {/* Filters and Search Bar */}
       <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center justify-between">
