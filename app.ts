@@ -98,10 +98,10 @@ async function getSignupsOpen(): Promise<boolean> {
       .eq('key', 'signups_open')
       .single();
     if (!error && data) {
-      return data.value === true || data.value === 'true';
+      if (data.value === false || data.value === 'false') return false;
     }
   } catch {}
-  return process.env.VITE_SIGNUPS_OPEN === 'true';
+  return true;
 }
 
 async function setSignupsOpenDb(open: boolean): Promise<void> {
