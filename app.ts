@@ -216,6 +216,14 @@ app.get('/api/data', requireAuth, async (req: AuthRequest, res) => {
     const user = req.user!;
     await getOrCreateUser(user.uid, user.email || '');
     
+    // Check if database is configured
+    if (!process.env.SQL_HOST) {
+      return res.status(503).json({ 
+        error: 'Database non configurato', 
+        message: 'Il database non è stato ancora inizializzato. Se hai appena pubblicato l\'app, attendi qualche istante o contatta l\'assistenza.' 
+      });
+    }
+    
     const bizs = await db.select().from(businesses).where(eq(businesses.userId, user.uid));
     
     let revs: any[] = [];
