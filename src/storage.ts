@@ -31,8 +31,12 @@ export function mapBusinessFromDb(row: any): Business {
   };
 }
 
-export function mapBusinessToDb(b: Business, userId: string) {
-  return {
+export const skippedBusinessColumns = new Set<string>();
+export const skippedReviewColumns = new Set<string>();
+export const skippedRequestColumns = new Set<string>();
+
+export function mapBusinessToDb(b: Business, userId: string, skip: Set<string> = skippedBusinessColumns) {
+  const row: any = {
     id: b.id,
     user_id: userId,
     name: b.name,
@@ -41,19 +45,20 @@ export function mapBusinessToDb(b: Business, userId: string) {
     signer_name: b.signerName,
     tone: b.tone,
     default_language: b.defaultLanguage,
-    phrases_to_avoid: b.phrasesToAvoid,
-    private_contact: b.privateContact,
-    google_url: b.googleUrl,
     is_connected: b.isConnected,
-    sms_template: b.smsTemplate,
-    google_place_id: b.googlePlaceId || null,
-    google_account_id: b.googleAccountId || null,
-    google_location_id: b.googleLocationId || null,
-    google_api_key: b.googleApiKey || null,
-    sync_frequency: b.syncFrequency || 'daily',
-    auto_sync_reviews: b.autoSyncReviews ?? true,
-    last_sync_at: b.lastSyncAt || null
+    sms_template: b.smsTemplate
   };
+  if (!skip.has('phrases_to_avoid')) row.phrases_to_avoid = b.phrasesToAvoid;
+  if (!skip.has('private_contact')) row.private_contact = b.privateContact;
+  if (!skip.has('google_url')) row.google_url = b.googleUrl;
+  if (!skip.has('google_place_id')) row.google_place_id = b.googlePlaceId || null;
+  if (!skip.has('google_account_id')) row.google_account_id = b.googleAccountId || null;
+  if (!skip.has('google_location_id')) row.google_location_id = b.googleLocationId || null;
+  if (!skip.has('google_api_key')) row.google_api_key = b.googleApiKey || null;
+  if (!skip.has('sync_frequency')) row.sync_frequency = b.syncFrequency || 'daily';
+  if (!skip.has('auto_sync_reviews')) row.auto_sync_reviews = b.autoSyncReviews ?? true;
+  if (!skip.has('last_sync_at')) row.last_sync_at = b.lastSyncAt || null;
+  return row;
 }
 
 export function mapReviewFromDb(row: any): Review {
@@ -71,19 +76,20 @@ export function mapReviewFromDb(row: any): Review {
   };
 }
 
-export function mapReviewToDb(r: Review) {
-  return {
+export function mapReviewToDb(r: Review, skip: Set<string> = skippedReviewColumns) {
+  const row: any = {
     id: r.id,
     business_id: r.businessId,
     author: r.author,
     stars: r.stars,
-    text: r.text,
-    date: r.date,
-    status: r.status,
-    reply_text: r.replyText || null,
-    reply_date: r.replyDate || null,
-    draft_text: r.draftText || null
+    status: r.status
   };
+  if (!skip.has('text')) row.text = r.text;
+  if (!skip.has('date')) row.date = r.date;
+  if (!skip.has('reply_text')) row.reply_text = r.replyText || null;
+  if (!skip.has('reply_date')) row.reply_date = r.replyDate || null;
+  if (!skip.has('draft_text')) row.draft_text = r.draftText || null;
+  return row;
 }
 
 export function mapRequestFromDb(row: any): RequestItem {
@@ -100,18 +106,19 @@ export function mapRequestFromDb(row: any): RequestItem {
   };
 }
 
-export function mapRequestToDb(req: RequestItem) {
-  return {
+export function mapRequestToDb(req: RequestItem, skip: Set<string> = skippedRequestColumns) {
+  const row: any = {
     id: req.id,
     business_id: req.businessId,
     client_name: req.clientName,
-    phone: req.phone,
-    date: req.date,
-    status: req.status,
-    text: req.text || null,
-    consent: req.consent,
-    consent_at: req.consentAt || null
+    status: req.status
   };
+  if (!skip.has('phone')) row.phone = req.phone;
+  if (!skip.has('date')) row.date = req.date;
+  if (!skip.has('text')) row.text = req.text || null;
+  if (!skip.has('consent')) row.consent = req.consent;
+  if (!skip.has('consent_at')) row.consent_at = req.consentAt || null;
+  return row;
 }
 
 export async function getAppData(userId: string): Promise<AppData> {
@@ -140,18 +147,54 @@ export async function getAppData(userId: string): Promise<AppData> {
 export async function saveAppData(userId: string, data: AppData): Promise<void> {
   try {
     if (data.businesses.length > 0) {
-      const bizRows = data.businesses.map(b => mapBusinessToDb(b, userId));
-      await supabase.from('businesses').upsert(bizRows);
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const bizRows = data.businesses.map(b => mapBusinessToDb(b, userId, skippedBusinessColumns));
+        const { error } = await supabase.from('businesses').upsert(bizRows);
+        if (error) {
+          const msg = error.message || '';
+          const match = msg.match(/Could not find the '([^']+)' column of 'businesses'/i);
+          if (match && match[1]) {
+            skippedBusinessColumns.add(match[1]);
+            continue;
+          }
+          throw error;
+        }
+        break;
+      }
     }
 
     if (data.reviews.length > 0) {
-      const revRows = data.reviews.map(mapReviewToDb);
-      await supabase.from('reviews').upsert(revRows);
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const revRows = data.reviews.map(r => mapReviewToDb(r, skippedReviewColumns));
+        const { error } = await supabase.from('reviews').upsert(revRows);
+        if (error) {
+          const msg = error.message || '';
+          const match = msg.match(/Could not find the '([^']+)' column of 'reviews'/i);
+          if (match && match[1]) {
+            skippedReviewColumns.add(match[1]);
+            continue;
+          }
+          throw error;
+        }
+        break;
+      }
     }
 
     if (data.requests.length > 0) {
-      const reqRows = data.requests.map(mapRequestToDb);
-      await supabase.from('requests').upsert(reqRows);
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const reqRows = data.requests.map(req => mapRequestToDb(req, skippedRequestColumns));
+        const { error } = await supabase.from('requests').upsert(reqRows);
+        if (error) {
+          const msg = error.message || '';
+          const match = msg.match(/Could not find the '([^']+)' column of 'requests'/i);
+          if (match && match[1]) {
+            skippedRequestColumns.add(match[1]);
+            continue;
+          }
+          throw error;
+        }
+        break;
+      }
     }
   } catch (err) {
     console.error('Supabase DB save error:', err);
@@ -177,9 +220,20 @@ export async function updateReviewInDb(reviewId: string, updates: Partial<Review
 
 export async function createRequestInDb(req: RequestItem): Promise<void> {
   try {
-    const row = mapRequestToDb(req);
-    const { error } = await supabase.from('requests').insert(row);
-    if (error) throw error;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const row = mapRequestToDb(req, skippedRequestColumns);
+      const { error } = await supabase.from('requests').insert(row);
+      if (error) {
+        const msg = error.message || '';
+        const match = msg.match(/Could not find the '([^']+)' column of 'requests'/i);
+        if (match && match[1]) {
+          skippedRequestColumns.add(match[1]);
+          continue;
+        }
+        throw error;
+      }
+      break;
+    }
   } catch (err) {
     console.error('Supabase create request error:', err);
     throw err;
@@ -210,13 +264,30 @@ export async function createBusinessInDb(userId: string, bData: Partial<Business
     lastSyncAt: ''
   };
 
-  try {
-    const row = mapBusinessToDb(newBiz, userId);
-    const { error } = await supabase.from('businesses').insert(row);
-    if (error) throw error;
-  } catch (err) {
-    console.error('Supabase create business error:', err);
-    throw err;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const row = mapBusinessToDb(newBiz, userId, skippedBusinessColumns);
+      const { error } = await supabase.from('businesses').insert(row);
+      if (error) {
+        const msg = error.message || '';
+        const match = msg.match(/Could not find the '([^']+)' column of 'businesses'/i);
+        if (match && match[1]) {
+          skippedBusinessColumns.add(match[1]);
+          continue;
+        }
+        throw error;
+      }
+      break;
+    } catch (err: any) {
+      if (attempt === 4) throw err;
+      const msg = err.message || '';
+      const match = msg.match(/Could not find the '([^']+)' column of 'businesses'/i);
+      if (match && match[1]) {
+        skippedBusinessColumns.add(match[1]);
+        continue;
+      }
+      throw err;
+    }
   }
 
   return newBiz;
