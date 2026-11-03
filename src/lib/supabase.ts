@@ -3,11 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 export function cleanSupabaseUrl(url: string | undefined | null): string {
   if (!url) return '';
   let cleaned = String(url).trim();
-  // Strip trailing slashes
   cleaned = cleaned.replace(/\/+$/, '');
-  // Strip /rest/v1 or /rest or /auth if accidentally appended in Vercel env var
   cleaned = cleaned.replace(/\/(rest|auth)(\/v1)?$/i, '');
-  // Strip trailing slashes again
   cleaned = cleaned.replace(/\/+$/, '');
   return cleaned;
 }
@@ -31,25 +28,13 @@ export const supabase = createClient(
   supabaseAnonKey || 'placeholder-key'
 );
 
-export async function getAuthToken(): Promise<string> {
+export async function getAuthToken(): Promise<string | null> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) return session.access_token;
-  } catch {}
-
-  const storedFallback = localStorage.getItem('reviewdesk_fallback_session');
-  if (storedFallback) {
-    try {
-      const parsed = JSON.parse(storedFallback);
-      if (parsed?.access_token) return parsed.access_token;
-    } catch {}
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    return session?.access_token || null;
+  } catch (err) {
+    console.error('Error getting auth token:', err);
+    return null;
   }
-
-  const fallbackPayload = JSON.stringify({
-    id: 'usr_admin_guest',
-    email: 'info@sititicino.ch',
-    role: 'admin',
-    ts: Date.now()
-  });
-  return 'fallback-token-' + btoa(fallbackPayload);
 }

@@ -7,84 +7,6 @@ export interface AppData {
   requests: RequestItem[];
 }
 
-export const initialDemoBusinesses: Business[] = [
-  {
-    id: 'biz-connect-create-1',
-    name: 'Connect and create',
-    category: 'Consulenza e Siti Web',
-    location: 'Morbiolo Inferiore / Lugano',
-    signerName: 'Gabriele',
-    tone: 'caloroso',
-    defaultLanguage: 'it',
-    phrasesToAvoid: '',
-    privateContact: 'info@sititicino.ch',
-    googleUrl: 'https://g.page/r/connect-and-create/review',
-    isConnected: true,
-    smsTemplate: 'Buongiorno {nome}, grazie per la collaborazione con Connect and create! Lasciaci una recensione su Google: {link}',
-    googlePlaceId: 'ChIJ_x5z8R3a1EcR95-xX8aL1mY',
-    googleAccountId: 'accounts/104928374920182736451',
-    googleLocationId: 'locations/98765432109876543210',
-    googleApiKey: '',
-    syncFrequency: 'daily',
-    autoSyncReviews: true,
-    lastSyncAt: new Date().toISOString()
-  }
-];
-
-export function generateDemoReviewsForBusiness(businessId: string): Review[] {
-  return [
-    {
-      id: businessId + '-real-1',
-      businessId,
-      author: 'luigi riente',
-      stars: 5,
-      text: 'Professionalità, competenza e prezzi reali. Lo sviluppatore mi ha risposto subito su WhatsApp, mi ha spiegato tutto con chiarezza.',
-      date: '2026-10-13',
-      status: 'da_rispondere'
-    },
-    {
-      id: businessId + '-real-2',
-      businessId,
-      author: 'Sara Casanova',
-      stars: 5,
-      text: 'Ottima consulenza e supporto eccellente per Connect and Create. Servizio puntuale e grande disponibilità in Ticino. Consigliatissimo!',
-      date: '2026-09-19',
-      status: 'pubblicata',
-      replyText: 'Grazie mille Sara per le bellissime parole! È stato un piacere collaborare con voi. Un caro saluto, Gabriele.',
-      replyDate: '2026-09-20'
-    }
-  ];
-}
-
-export function generateDemoRequestsForBusiness(businessId: string): RequestItem[] {
-  const nowIso = new Date().toISOString();
-  return [
-    {
-      id: businessId + '-req-1',
-      businessId,
-      clientName: 'luigi riente',
-      phone: '+41791234567',
-      date: '2026-10-13 14:30',
-      status: 'recensione_ricevuta',
-      text: 'Ciao Luigi! Grazie per la collaborazione.',
-      consent: true,
-      consentAt: nowIso
-    },
-    {
-      id: businessId + '-req-2',
-      businessId,
-      clientName: 'Sara Casanova',
-      phone: '+41789876543',
-      date: '2026-09-18 19:15',
-      status: 'recensione_ricevuta',
-      text: 'Buongiorno Sara, grazie per la visita!',
-      consent: true,
-      consentAt: nowIso
-    }
-  ];
-}
-
-// Mappers
 export function mapBusinessFromDb(row: any): Business {
   return {
     id: row.id,
@@ -192,96 +114,30 @@ export function mapRequestToDb(req: RequestItem) {
   };
 }
 
-// Storage API functions using Supabase
-// Storage API functions using Supabase with LocalStorage fallback
 export async function getAppData(userId: string): Promise<AppData> {
-  const cacheKey = `reviewdesk_data_${userId}`;
-
   try {
     const [bizRes, revRes, reqRes] = await Promise.all([
-      supabase.from('businesses').select('*'),
+      supabase.from('businesses').select('*').eq('user_id', userId),
       supabase.from('reviews').select('*'),
       supabase.from('requests').select('*')
     ]);
 
     if (!bizRes.error && !revRes.error && !reqRes.error) {
       const businesses = (bizRes.data || []).map(mapBusinessFromDb);
-      const reviews = (revRes.data || []).map(mapReviewFromDb);
-      const requests = (reqRes.data || []).map(mapRequestFromDb);
+      const bizIds = new Set(businesses.map(b => b.id));
+      const reviews = (revRes.data || []).map(mapReviewFromDb).filter(r => bizIds.has(r.businessId));
+      const requests = (reqRes.data || []).map(mapRequestFromDb).filter(req => bizIds.has(req.businessId));
 
-      if (businesses.length > 0) {
-        // Merge with LocalStorage to preserve any imported reviews
-        const cachedStr = localStorage.getItem(cacheKey);
-        let mergedReviews = reviews;
-        if (cachedStr) {
-          try {
-            const cached = JSON.parse(cachedStr);
-            if (Array.isArray(cached.reviews) && cached.reviews.length > 0) {
-              const dbRevMap = new Map(reviews.map(r => [r.id, r]));
-              for (const cr of cached.reviews) {
-                if (!dbRevMap.has(cr.id)) {
-                  dbRevMap.set(cr.id, cr);
-                }
-              }
-              mergedReviews = Array.from(dbRevMap.values());
-            }
-          } catch {}
-        }
-
-        const fullData = { businesses, reviews: mergedReviews, requests };
-        localStorage.setItem(cacheKey, JSON.stringify(fullData));
-        return fullData;
-      }
+      return { businesses, reviews, requests };
     }
   } catch (err) {
-    console.warn('Supabase DB fetch error, falling back to local cache:', err);
+    console.error('Supabase DB fetch error:', err);
   }
 
-  // Check LocalStorage cache
-  const cachedStr = localStorage.getItem(cacheKey);
-  if (cachedStr) {
-    try {
-      const cached = JSON.parse(cachedStr);
-      if (cached && Array.isArray(cached.businesses) && cached.businesses.length > 0) {
-        return cached;
-      }
-    } catch {}
-  }
-
-  // If no data found at all, return default demo data or admin business
-  const isAdmin = userId.includes('sititicino') || userId.includes('admin');
-  const demoBizList = initialDemoBusinesses.map((b, idx) => {
-    if (idx === 0 && isAdmin) {
-      return {
-        ...b,
-        name: 'Connect and create',
-        category: 'Consulenza e Siti Web',
-        location: 'Morbiolo Inferiore / Lugano',
-        signerName: 'Gabriele Sestito',
-        privateContact: 'info@sititicino.ch'
-      };
-    }
-    return b;
-  });
-
-  const demoBiz = demoBizList[0];
-  const demoRev = generateDemoReviewsForBusiness(demoBiz.id);
-  const demoReq = generateDemoRequestsForBusiness(demoBiz.id);
-
-  const fallbackData: AppData = {
-    businesses: [demoBiz],
-    reviews: demoRev,
-    requests: demoReq
-  };
-
-  localStorage.setItem(cacheKey, JSON.stringify(fallbackData));
-  return fallbackData;
+  return { businesses: [], reviews: [], requests: [] };
 }
 
 export async function saveAppData(userId: string, data: AppData): Promise<void> {
-  const cacheKey = `reviewdesk_data_${userId}`;
-  localStorage.setItem(cacheKey, JSON.stringify(data));
-
   try {
     if (data.businesses.length > 0) {
       const bizRows = data.businesses.map(b => mapBusinessToDb(b, userId));
@@ -298,7 +154,8 @@ export async function saveAppData(userId: string, data: AppData): Promise<void> 
       await supabase.from('requests').upsert(reqRows);
     }
   } catch (err) {
-    console.warn('Supabase DB save error:', err);
+    console.error('Supabase DB save error:', err);
+    throw err;
   }
 }
 
@@ -310,18 +167,22 @@ export async function updateReviewInDb(reviewId: string, updates: Partial<Review
     if (updates.replyText !== undefined) dbUpdates.reply_text = updates.replyText;
     if (updates.replyDate !== undefined) dbUpdates.reply_date = updates.replyDate;
 
-    await supabase.from('reviews').update(dbUpdates).eq('id', reviewId);
+    const { error } = await supabase.from('reviews').update(dbUpdates).eq('id', reviewId);
+    if (error) throw error;
   } catch (err) {
-    console.warn('Supabase update review error:', err);
+    console.error('Supabase update review error:', err);
+    throw err;
   }
 }
 
 export async function createRequestInDb(req: RequestItem): Promise<void> {
   try {
     const row = mapRequestToDb(req);
-    await supabase.from('requests').insert(row);
+    const { error } = await supabase.from('requests').insert(row);
+    if (error) throw error;
   } catch (err) {
-    console.warn('Supabase create request error:', err);
+    console.error('Supabase create request error:', err);
+    throw err;
   }
 }
 
@@ -351,115 +212,35 @@ export async function createBusinessInDb(userId: string, bData: Partial<Business
 
   try {
     const row = mapBusinessToDb(newBiz, userId);
-    await supabase.from('businesses').insert(row);
+    const { error } = await supabase.from('businesses').insert(row);
+    if (error) throw error;
   } catch (err) {
-    console.warn('Supabase create business error:', err);
-  }
-
-  // Update local cache
-  const cacheKey = `reviewdesk_data_${userId}`;
-  const cachedStr = localStorage.getItem(cacheKey);
-  if (cachedStr) {
-    try {
-      const cached = JSON.parse(cachedStr);
-      cached.businesses = cached.businesses || [];
-      cached.businesses.push(newBiz);
-      localStorage.setItem(cacheKey, JSON.stringify(cached));
-    } catch {}
+    console.error('Supabase create business error:', err);
+    throw err;
   }
 
   return newBiz;
 }
 
-export async function loadDemoDataToDb(userId: string): Promise<AppData> {
-  const cacheKey = `reviewdesk_data_${userId}`;
-  const isAdmin = userId.includes('sititicino') || userId.includes('admin');
-
-  const demoBiz = {
-    ...initialDemoBusinesses[0],
-    name: isAdmin ? 'Connect and create' : initialDemoBusinesses[0].name
-  };
-  const demoRev = generateDemoReviewsForBusiness(demoBiz.id);
-  const demoReq = generateDemoRequestsForBusiness(demoBiz.id);
-
-  const fullData = { businesses: [demoBiz], reviews: demoRev, requests: demoReq };
-  localStorage.setItem(cacheKey, JSON.stringify(fullData));
-
-  try {
-    const bizRow = mapBusinessToDb(demoBiz, userId);
-    const revRows = demoRev.map(mapReviewToDb);
-    const reqRows = demoReq.map(mapRequestToDb);
-
-    await supabase.from('businesses').insert(bizRow);
-    if (revRows.length > 0) await supabase.from('reviews').insert(revRows);
-    if (reqRows.length > 0) await supabase.from('requests').insert(reqRows);
-  } catch (err) {
-    console.warn('Supabase load demo data error:', err);
-  }
-
-  return fullData;
-}
-
 export async function clearDemoData(userId: string): Promise<AppData> {
-  const cacheKey = `reviewdesk_data_${userId}`;
-
-  try {
-    const demoBizIds = initialDemoBusinesses.map(b => b.id);
-    await supabase.from('reviews').delete().in('business_id', demoBizIds);
-    await supabase.from('requests').delete().in('business_id', demoBizIds);
-    await supabase.from('businesses').delete().in('id', demoBizIds);
-
-    // Remove any review/request with demo ID patterns
-    await supabase.from('reviews').delete().like('id', '%-rev-%');
-    await supabase.from('requests').delete().like('id', '%-req-%');
-  } catch (err) {
-    console.warn('Supabase clear demo error:', err);
-  }
-
-  const cachedStr = localStorage.getItem(cacheKey);
-  let current: AppData = { businesses: [], reviews: [], requests: [] };
-  if (cachedStr) {
-    try {
-      current = JSON.parse(cachedStr);
-    } catch {}
-  }
-
-  const demoIdsSet = new Set(initialDemoBusinesses.map(b => b.id));
-  current.businesses = (current.businesses || []).filter(
-    b => !demoIdsSet.has(b.id) && !b.id.startsWith('osteria-demo') && !b.id.startsWith('salone-demo') && !b.id.startsWith('studio-demo')
-  );
-  current.reviews = (current.reviews || []).filter(r => !r.id.includes('-rev-'));
-  current.requests = (current.requests || []).filter(req => !req.id.includes('-req-'));
-
-  localStorage.setItem(cacheKey, JSON.stringify(current));
-  return current;
+  return getAppData(userId);
 }
 
 export async function resetAppData(userId: string): Promise<AppData> {
-  const cacheKey = `reviewdesk_data_${userId}`;
-  localStorage.removeItem(cacheKey);
+  return getAppData(userId);
+}
 
-  try {
-    const { data: userBiz } = await supabase.from('businesses').select('id');
-    if (userBiz && userBiz.length > 0) {
-      const bizIds = userBiz.map(b => b.id);
-      await supabase.from('reviews').delete().in('business_id', bizIds);
-      await supabase.from('requests').delete().in('business_id', bizIds);
-      await supabase.from('businesses').delete().in('id', bizIds);
-    }
-  } catch (err) {
-    console.warn('Supabase reset data error:', err);
-  }
-
-  return loadDemoDataToDb(userId);
+export async function loadDemoDataToDb(userId: string): Promise<AppData> {
+  return getAppData(userId);
 }
 
 export async function deleteMyAccount() {
   try {
-    await supabase.rpc('delete_my_account');
-  } catch {}
+    const { error } = await supabase.rpc('delete_my_account');
+    if (error) throw error;
+  } catch (err) {
+    console.error('Error deleting account via RPC:', err);
+  }
   await supabase.auth.signOut();
-  localStorage.clear();
   return { success: true };
 }
-

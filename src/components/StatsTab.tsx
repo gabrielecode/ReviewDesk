@@ -9,7 +9,7 @@ import {
   CartesianGrid 
 } from 'recharts';
 import { Business, Review, InsightsData } from '../types';
-import { supabase, getAuthToken } from '../lib/supabase';
+import { getAuthToken } from '../lib/supabase';
 
 interface StatsTabProps {
   business: Business;
@@ -23,7 +23,6 @@ export const StatsTab: React.FC<StatsTabProps> = ({ business, reviews }) => {
 
   const STORAGE_INSIGHTS_KEY = `reviewdesk_insights_${business.id}`;
 
-  // Load cached insights on mount
   useEffect(() => {
     try {
       const cached = localStorage.getItem(STORAGE_INSIGHTS_KEY);
@@ -38,17 +37,14 @@ export const StatsTab: React.FC<StatsTabProps> = ({ business, reviews }) => {
     }
   }, [business.id]);
 
-  // Calculate stats
   const totalReviews = reviews.length;
   const avgStars = totalReviews > 0 
     ? (reviews.reduce((acc, r) => acc + r.stars, 0) / totalReviews).toFixed(1) 
     : '0.0';
   
-  // Conteggio pubblicate = solo stato pubblicata
   const publishedCount = reviews.filter(r => r.status === 'pubblicata').length;
   const publishedPct = totalReviews > 0 ? Math.round((publishedCount / totalReviews) * 100) : 0;
 
-  // Tempo medio di risposta calcolato dai giorni dinamicamente
   let avgResponseTime = 'n/d';
   const repliedWithDates = reviews.filter(r => r.date && r.replyDate);
   if (repliedWithDates.length > 0) {
@@ -110,9 +106,9 @@ export const StatsTab: React.FC<StatsTabProps> = ({ business, reviews }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({ business, reviews }),
+        body: JSON.stringify({ businessId: business.id }),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -134,12 +130,10 @@ export const StatsTab: React.FC<StatsTabProps> = ({ business, reviews }) => {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Page Title */}
       <div className="flex items-center justify-between">
         <h2 className="font-semibold text-xl text-[#1C2321]">Statistiche e analisi</h2>
       </div>
 
-      {/* 4 Numbers in a Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="panel-card p-4 space-y-1">
           <p className="text-xs text-[#667069] font-medium">Media stelle</p>
@@ -173,9 +167,7 @@ export const StatsTab: React.FC<StatsTabProps> = ({ business, reviews }) => {
         </div>
       </div>
 
-      {/* Line Chart & Insights */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Single Line Chart with real review counts */}
         <div className="panel-card p-5 space-y-4">
           <h3 className="font-semibold text-xs text-[#1C2321] uppercase tracking-wide">Andamento recensioni (ultimi 6 mesi)</h3>
           <div className="h-64 w-full pt-2">
@@ -193,7 +185,6 @@ export const StatsTab: React.FC<StatsTabProps> = ({ business, reviews }) => {
           </div>
         </div>
 
-        {/* AI Insights Panel */}
         <div className="panel-card p-5 space-y-4 flex flex-col justify-between">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -226,7 +217,7 @@ export const StatsTab: React.FC<StatsTabProps> = ({ business, reviews }) => {
             )}
 
             {loadingInsights && (
-              <p className="text-xs text-[#667069] py-8 text-center">Analisi in corso con OpenRouter...</p>
+              <p className="text-xs text-[#667069] py-8 text-center">Analisi in corso...</p>
             )}
 
             {insights && !loadingInsights && (
@@ -235,7 +226,7 @@ export const StatsTab: React.FC<StatsTabProps> = ({ business, reviews }) => {
                   <p className="font-medium text-[#1F5F4A]">Punti di forza</p>
                   <ul className="space-y-1.5">
                     {insights.strengths.length === 0 ? (
-                      <li className="text-[#667069] italic">Nessun punto di forza evidenziato.</li>
+                      <li className="text-[#667069] italic bg-[#F6F7F5] p-2.5 rounded-[6px] border border-[#E5E7E3]">Dati insufficienti</li>
                     ) : (
                       insights.strengths.map((item, idx) => (
                         <li key={idx} className="bg-[#F6F7F5] p-2.5 rounded-[6px] border border-[#E5E7E3] text-[#1C2321]">
@@ -250,7 +241,7 @@ export const StatsTab: React.FC<StatsTabProps> = ({ business, reviews }) => {
                   <p className="font-medium text-[#B3382C]">Aree di miglioramento</p>
                   <ul className="space-y-1.5">
                     {insights.improvements.length === 0 ? (
-                      <li className="text-[#667069] italic">Nessuna area di miglioramento evidenziata.</li>
+                      <li className="text-[#667069] italic bg-[#F6F7F5] p-2.5 rounded-[6px] border border-[#E5E7E3]">Dati insufficienti</li>
                     ) : (
                       insights.improvements.map((item, idx) => (
                         <li key={idx} className="bg-[#F6F7F5] p-2.5 rounded-[6px] border border-[#E5E7E3] text-[#1C2321]">

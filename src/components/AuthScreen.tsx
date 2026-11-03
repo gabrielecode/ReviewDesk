@@ -43,81 +43,40 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login', o
     setLoading(true);
 
     try {
-      if (view === 'login' || view === 'register') {
-        // First try the custom API route which seamlessly authenticates or creates the session
-        let apiSuccess = false;
-        try {
-          const apiRes = await fetch('/api/auth/login-or-register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: normEmail, password, action: view })
-          });
-
-          if (apiRes.ok) {
-            const data = await apiRes.json();
-            if (data?.session) {
-              localStorage.setItem('reviewdesk_fallback_session', JSON.stringify(data.session));
-              if (data.session.access_token && !data.isFallback) {
-                try {
-                  await supabase.auth.setSession(data.session);
-                } catch {}
-              }
-              if (onAuthSuccess) {
-                onAuthSuccess(data.session);
-              } else {
-                window.location.reload();
-              }
-              apiSuccess = true;
-              return;
-            }
-          }
-        } catch (err) {
-          console.warn('API login-or-register fetch error:', err);
+      if (view === 'login') {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: normEmail, password })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Credenziali non valide');
         }
-
-        if (!apiSuccess) {
-          // Client-side Supabase attempt
-          if (view === 'login') {
-            const { data, error: loginErr } = await supabase.auth.signInWithPassword({ email: normEmail, password });
-            if (!loginErr && data.session) {
-              localStorage.setItem('reviewdesk_fallback_session', JSON.stringify(data.session));
-              if (onAuthSuccess) onAuthSuccess(data.session);
-              else window.location.reload();
-              return;
-            }
-            if (loginErr) throw loginErr;
+        if (data?.session) {
+          await supabase.auth.setSession(data.session);
+          if (onAuthSuccess) {
+            onAuthSuccess(data.session);
           } else {
-            const { data, error: signUpErr } = await supabase.auth.signUp({
-              email: normEmail,
-              password,
-              options: { emailRedirectTo: window.location.origin + '/app' }
-            });
-
-            if (data?.session) {
-              localStorage.setItem('reviewdesk_fallback_session', JSON.stringify(data.session));
-              if (onAuthSuccess) onAuthSuccess(data.session);
-              else window.location.reload();
-              return;
-            }
-
-            if (signUpErr) {
-              // If error is about email confirmation, bypass with local session for smooth experience
-              if (signUpErr.message?.includes('confirmation email') || signUpErr.message?.includes('not confirmed')) {
-                const fallbackSession = {
-                  access_token: 'fallback-token-' + btoa(normEmail),
-                  user: {
-                    id: 'usr_' + Date.now(),
-                    email: normEmail,
-                    user_metadata: { name: normEmail.split('@')[0] }
-                  }
-                };
-                localStorage.setItem('reviewdesk_fallback_session', JSON.stringify(fallbackSession));
-                if (onAuthSuccess) onAuthSuccess(fallbackSession);
-                else window.location.reload();
-                return;
-              }
-              throw signUpErr;
-            }
+            window.location.reload();
+          }
+        }
+      } else if (view === 'register') {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: normEmail, password })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Errore durante la registrazione');
+        }
+        if (data?.session) {
+          await supabase.auth.setSession(data.session);
+          if (onAuthSuccess) {
+            onAuthSuccess(data.session);
+          } else {
+            window.location.reload();
           }
         }
       } else if (view === 'forgot') {
@@ -134,15 +93,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login', o
       }
     } catch (err: any) {
       console.error(err);
-      let msg = err.message || 'Errore durante l\'autenticazione';
-      if (msg.includes('Invalid login credentials')) {
-        msg = 'Nessun account trovato o password errata. Se non hai ancora un account, passa alla tab "Registrati" sopra.';
-      } else if (msg.includes('Email not confirmed') || msg.includes('confirmation email')) {
-        msg = 'Attenzione: la conferma via email su Supabase non è necessaria. Clicca su "Accedi" per accedere direttamente.';
-      } else if (msg.includes('User already registered')) {
-        msg = 'Esiste già un account con questa email. Clicca sulla tab "Accedi" sopra per entrare.';
-      }
-      setError(msg);
+      setError(err.message || 'Errore durante l\'autenticazione');
     } finally {
       setLoading(false);
     }
@@ -151,14 +102,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login', o
   return (
     <div className="min-h-screen bg-[#F6F7F5] flex items-center justify-center p-4 font-sans text-[#1C2321]">
       <div className="max-w-md w-full panel-card p-8 space-y-6 shadow-sm bg-white relative">
-        {/* Torna al sito link */}
         <div className="flex items-center justify-between text-xs">
           <a href="/" className="text-[#1F5F4A] hover:underline font-medium inline-flex items-center gap-1">
             <ArrowLeft className="w-3.5 h-3.5" /> Torna al sito
           </a>
         </div>
 
-        {/* Header */}
         <div className="text-center space-y-2">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-[#E8F0EC] text-[#1F5F4A] mb-1">
             <MessageSquare className="w-6 h-6" />
@@ -169,7 +118,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialView = 'login', o
           </p>
         </div>
 
-        {/* Tab switch */}
         {view !== 'recovery' && (
           <div className="flex rounded-[6px] bg-[#F6F7F5] p-1 border border-[#E5E7E3] text-xs">
             <button
