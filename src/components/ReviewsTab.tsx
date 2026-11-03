@@ -59,20 +59,23 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
 
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data.reviews) && data.reviews.length > 0 && onImportReviews) {
+        if (data.success === false) {
+          setSyncBannerMsg(data.message || 'Impossibile importare le recensioni reali.');
+        } else if (Array.isArray(data.reviews) && data.reviews.length > 0 && onImportReviews) {
           onImportReviews(data.reviews, business.id, {
             isConnected: true,
             lastSyncAt: data.lastSyncAt || new Date().toISOString(),
             googlePlaceId: data.googlePlaceId || business.googlePlaceId,
             googleUrl: data.resolvedUrl || business.googleUrl
           });
+          setSyncBannerMsg(data.message || 'Recensioni reali sincronizzate con successo!');
         } else {
           onRefreshReviews();
+          setSyncBannerMsg(data.message || 'Nessuna recensione trovata.');
         }
-        setSyncBannerMsg(data.message || 'Recensioni storiche sincronizzate con successo!');
       } else {
         onRefreshReviews();
-        setSyncBannerMsg('Sincronizzazione completata!');
+        setSyncBannerMsg('Errore durante la sincronizzazione.');
       }
     } catch (err: any) {
       console.error(err);

@@ -67,37 +67,38 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
 
       if (res.ok) {
         const data = await res.json();
-        const nowStr = data.lastSyncAt || new Date().toISOString();
-        const updatedFields: Partial<Business> = {
-          isConnected: true,
-          lastSyncAt: nowStr
-        };
-        if (data.resolvedUrl) {
-          updatedFields.googleUrl = data.resolvedUrl;
-        }
-        if (data.googlePlaceId) {
-          updatedFields.googlePlaceId = data.googlePlaceId;
-        }
-
-        setFormData(prev => ({
-          ...prev,
-          ...updatedFields
-        }));
-
-        if (Array.isArray(data.reviews) && data.reviews.length > 0 && onImportReviews) {
-          onImportReviews(data.reviews, business.id, updatedFields);
+        if (data.success === false) {
+          setSyncMessage(data.message || 'Impossibile importare le recensioni reali.');
         } else {
-          onUpdateBusiness(updatedFields);
+          const nowStr = data.lastSyncAt || new Date().toISOString();
+          const updatedFields: Partial<Business> = {
+            isConnected: true,
+            lastSyncAt: nowStr
+          };
+          if (data.resolvedUrl) {
+            updatedFields.googleUrl = data.resolvedUrl;
+          }
+          if (data.googlePlaceId) {
+            updatedFields.googlePlaceId = data.googlePlaceId;
+          }
+
+          setFormData(prev => ({
+            ...prev,
+            ...updatedFields
+          }));
+
+          if (Array.isArray(data.reviews) && data.reviews.length > 0 && onImportReviews) {
+            onImportReviews(data.reviews, business.id, updatedFields);
+          } else {
+            onUpdateBusiness(updatedFields);
+          }
+
+          if (onRefreshReviews) onRefreshReviews();
+
+          setSyncMessage(data.message || 'Sincronizzazione completata! Recensioni reali caricate da Google.');
         }
-
-        if (onRefreshReviews) onRefreshReviews();
-
-        setSyncMessage(data.message || 'Sincronizzazione completata! Recensioni storiche caricate da Google.');
       } else {
-        const nowStr = new Date().toISOString();
-        setFormData(prev => ({ ...prev, lastSyncAt: nowStr, isConnected: true }));
-        onUpdateBusiness({ lastSyncAt: nowStr, isConnected: true });
-        setSyncMessage('Sincronizzazione completata con successo!');
+        setSyncMessage('Errore durante la sincronizzazione.');
       }
     } catch (err: any) {
       console.error(err);

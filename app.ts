@@ -568,14 +568,18 @@ app.post('/api/sync-google-reviews', requireAuth, rateLimiter, async (req, res) 
     }
 
     if (importedReviews.length === 0) {
+      const msg = (!resolvedPlaceId || !mapsApiKey)
+        ? 'Impossibile importare recensioni reali: inserisci un Google Place ID valido e una Chiave API Google Maps (con Places API abilitata) nelle impostazioni dell\'attività.'
+        : 'Nessuna recensione trovata su Google Places per questo Place ID o chiave API non valida.';
+
       return res.json({
-        success: true,
+        success: false,
         count: 0,
         reviews: [],
         resolvedUrl: finalUrl,
         googlePlaceId: resolvedPlaceId,
         lastSyncAt: new Date().toISOString(),
-        message: 'Nessuna recensione trovata su Google per questa attività o chiave API non configurata.'
+        message: msg
       });
     }
 
