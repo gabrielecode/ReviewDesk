@@ -135,16 +135,16 @@ export async function getAppData(userId: string): Promise<AppData> {
     }
 
     if (businesses.length > 0) {
-      const bizIds = new Set(businesses.map(b => b.id));
+      const bizIds = businesses.map(b => b.id);
       
-      const revRes = await supabase.from('reviews').select('*');
+      const revRes = await supabase.from('reviews').select('*').in('business_id', bizIds);
       if (!revRes.error && revRes.data) {
-        reviews = revRes.data.map(mapReviewFromDb).filter(r => bizIds.has(r.businessId));
+        reviews = revRes.data.map(mapReviewFromDb);
       }
 
-      const reqRes = await supabase.from('requests').select('*');
+      const reqRes = await supabase.from('requests').select('*').in('business_id', bizIds);
       if (!reqRes.error && reqRes.data) {
-        requests = reqRes.data.map(mapRequestFromDb).filter(req => bizIds.has(req.businessId));
+        requests = reqRes.data.map(mapRequestFromDb);
       }
     }
   } catch (err) {
@@ -303,16 +303,75 @@ export async function createBusinessInDb(userId: string, bData: Partial<Business
   return newBiz;
 }
 
+export const DEMO_BUSINESSES: Business[] = [
+  {
+    id: 'demo-biz-1',
+    name: 'Osteria Centrale',
+    category: 'Ristorazione',
+    location: 'Lugano',
+    signerName: 'Chef Marco',
+    tone: 'caloroso',
+    defaultLanguage: 'it',
+    phrasesToAvoid: 'costoso, lento',
+    privateContact: 'direzione@osteriacentrale.ch',
+    googleUrl: 'https://g.page/review',
+    isConnected: false,
+    smsTemplate: 'Ciao {nome}, grazie per averci scelto! Lasciaci una recensione qui: {link}',
+    googlePlaceId: '',
+    googleAccountId: '',
+    googleLocationId: '',
+    googleApiKey: '',
+    syncFrequency: 'daily',
+    autoSyncReviews: true,
+    lastSyncAt: ''
+  }
+];
+
+export const DEMO_REVIEWS: Review[] = [
+  {
+    id: 'demo-rev-1',
+    businessId: 'demo-biz-1',
+    author: 'Elena Bianchi',
+    stars: 5,
+    text: 'Cibo eccellente e servizio impeccabile. Lo consiglio a tutti!',
+    date: new Date().toISOString().split('T')[0],
+    status: 'da_rispondere'
+  },
+  {
+    id: 'demo-rev-2',
+    businessId: 'demo-biz-1',
+    author: 'Luca Rossi',
+    stars: 4,
+    text: 'Ambiente molto accogliente, peccato per il parcheggio difficile.',
+    date: new Date().toISOString().split('T')[0],
+    status: 'risposto',
+    replyText: 'Grazie Luca! Siamo felici che ti sia piaciuto l\'ambiente. Purtroppo il parcheggio in centro è una sfida, ma speriamo di rivederti presto!',
+    replyDate: new Date().toISOString().split('T')[0]
+  }
+];
+
 export async function clearDemoData(userId: string): Promise<AppData> {
+  // In a real app, we might want to delete demo records from DB.
+  // For now, we just reload real data.
   return getAppData(userId);
 }
 
 export async function resetAppData(userId: string): Promise<AppData> {
+  // Seeds the DB with demo data for this user
+  try {
+    const bizRows = DEMO_BUSINESSES.map(b => mapBusinessToDb({ ...b, id: 'demo-' + userId.substring(0, 8) + '-' + b.id }, userId));
+    await supabase.from('businesses').upsert(bizRows);
+    
+    const revRows = DEMO_REVIEWS.map(r => mapReviewToDb({ ...r, businessId: bizRows[0].id }));
+    await supabase.from('reviews').upsert(revRows);
+  } catch (err) {
+    console.error('Error seeding demo data:', err);
+  }
   return getAppData(userId);
 }
 
 export async function loadDemoDataToDb(userId: string): Promise<AppData> {
-  return getAppData(userId);
+  return resetAppData(userId);
 }
 
 export async function deleteMyAccount() {

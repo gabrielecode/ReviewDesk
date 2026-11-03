@@ -196,6 +196,25 @@ export default function App() {
     setRequests(data.requests);
   };
 
+  const handleResetDemoData = async () => {
+    if (!session?.user?.id) return;
+    setDataLoading(true);
+    try {
+      const { resetAppData } = await import('./storage');
+      const data = await resetAppData(session.user.id);
+      setBusinesses(data.businesses);
+      setReviews(data.reviews);
+      setRequests(data.requests);
+      if (data.businesses.length > 0) {
+        setCurrentBusinessId(data.businesses[0].id);
+      }
+    } catch (err: any) {
+      alert('Errore nel ripristino dati demo: ' + err.message);
+    } finally {
+      setDataLoading(false);
+    }
+  };
+
   const currentReviews = reviews.filter(r => r.businessId === currentBusiness?.id);
   const currentRequests = requests.filter(r => r.businessId === currentBusiness?.id);
 
@@ -333,13 +352,32 @@ export default function App() {
             </button>
           </form>
 
-          <div className="text-center pt-2">
+          <div className="pt-2 space-y-3">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-[#E5E7E3]"></span>
+              </div>
+              <div className="relative flex justify-center text-[10px] uppercase tracking-wider">
+                <span className="bg-white px-2 text-[#667069] font-medium">Oppure</span>
+              </div>
+            </div>
+
             <button
-              onClick={handleSignOut}
-              className="text-xs text-[#B3382C] font-medium hover:underline"
+              onClick={handleResetDemoData}
+              className="w-full py-2 px-4 border border-[#1F5F4A]/30 text-[#1F5F4A] rounded-[6px] text-xs font-medium hover:bg-[#E8F0EC] transition flex items-center justify-center gap-2"
             >
-              Esci dall'account
+              <Sparkles className="w-3.5 h-3.5" />
+              Esplora con dati demo di prova
             </button>
+
+            <div className="text-center pt-2">
+              <button
+                onClick={handleSignOut}
+                className="text-xs text-[#B3382C] font-medium hover:underline"
+              >
+                Esci dall'account
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -354,7 +392,7 @@ export default function App() {
         onSelectBusiness={(id) => setCurrentBusinessId(id)}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        onResetData={() => loadData()}
+        onResetData={handleResetDemoData}
         onClearDemoData={() => loadData()}
         onOpenConnectionModal={() => setIsConnectionModalOpen(true)}
         userEmail={session.user.email}
@@ -400,7 +438,7 @@ export default function App() {
               onRefreshReviews={handleRefreshReviews}
               onImportReviews={handleImportReviews}
               onClearDemoData={() => loadData()}
-              onResetData={() => loadData()}
+              onResetData={handleResetDemoData}
             />
           )}
 
