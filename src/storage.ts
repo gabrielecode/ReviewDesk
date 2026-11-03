@@ -122,26 +122,36 @@ export function mapRequestToDb(req: RequestItem, skip: Set<string> = skippedRequ
 }
 
 export async function getAppData(userId: string): Promise<AppData> {
+  let businesses: Business[] = [];
+  let reviews: Review[] = [];
+  let requests: RequestItem[] = [];
+
   try {
-    const [bizRes, revRes, reqRes] = await Promise.all([
-      supabase.from('businesses').select('*').eq('user_id', userId),
-      supabase.from('reviews').select('*'),
-      supabase.from('requests').select('*')
-    ]);
+    const bizRes = await supabase.from('businesses').select('*').eq('user_id', userId);
+    if (!bizRes.error && bizRes.data) {
+      businesses = bizRes.data.map(mapBusinessFromDb);
+    } else if (bizRes.error) {
+      console.error('Supabase fetch businesses error:', bizRes.error);
+    }
 
-    if (!bizRes.error && !revRes.error && !reqRes.error) {
-      const businesses = (bizRes.data || []).map(mapBusinessFromDb);
+    if (businesses.length > 0) {
       const bizIds = new Set(businesses.map(b => b.id));
-      const reviews = (revRes.data || []).map(mapReviewFromDb).filter(r => bizIds.has(r.businessId));
-      const requests = (reqRes.data || []).map(mapRequestFromDb).filter(req => bizIds.has(req.businessId));
+      
+      const revRes = await supabase.from('reviews').select('*');
+      if (!revRes.error && revRes.data) {
+        reviews = revRes.data.map(mapReviewFromDb).filter(r => bizIds.has(r.businessId));
+      }
 
-      return { businesses, reviews, requests };
+      const reqRes = await supabase.from('requests').select('*');
+      if (!reqRes.error && reqRes.data) {
+        requests = reqRes.data.map(mapRequestFromDb).filter(req => bizIds.has(req.businessId));
+      }
     }
   } catch (err) {
     console.error('Supabase DB fetch error:', err);
   }
 
-  return { businesses: [], reviews: [], requests: [] };
+  return { businesses, reviews, requests };
 }
 
 export async function saveAppData(userId: string, data: AppData): Promise<void> {

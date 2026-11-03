@@ -543,13 +543,17 @@ app.post('/api/sync-google-reviews', requireAuth, rateLimiter, async (req, res) 
             resolvedName = pData.displayName.text;
           }
           if (Array.isArray(pData.reviews)) {
-            importedReviews = pData.reviews.map((rev: any, index: number) => {
+            importedReviews = pData.reviews.map((rev: any) => {
               const author = rev.authorAttribution?.displayName || 'Cliente Google';
               const rating = rev.rating || 5;
               const text = rev.text?.text || '';
               const publishTime = rev.publishTime ? rev.publishTime.split('T')[0] : new Date().toISOString().split('T')[0];
+              
+              // Generate a stable ID based on business, author and text hash
+              const stableId = `g-rev-${business.id}-${Buffer.from(author + text.substring(0, 50)).toString('hex').substring(0, 16)}`;
+              
               return {
-                id: `g-rev-${business.id}-${Date.now()}-${index}`,
+                id: stableId,
                 business_id: business.id,
                 author,
                 stars: rating,
