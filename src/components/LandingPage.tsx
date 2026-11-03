@@ -10,26 +10,48 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenDashboard }) => 
   const [attivita, setAttivita] = useState('');
   const [tipo, setTipo] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [okConsent, setOkConsent] = useState(false);
   const [esito, setEsito] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [errore, setErrore] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nome || !attivita || !tipo || !email || !okConsent) return;
+    setErrore('');
+    setEsito('');
     
+    if (!nome || !attivita || !tipo || !email || !password || !okConsent) {
+      setErrore('Compila tutti i campi obbligatori.');
+      return;
+    }
+    
+    setLoading(true);
     try {
-      await fetch('/api/request-access', {
+      const res = await fetch('/api/public/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: nome, businessName: attivita, businessType: tipo, email })
+        body: JSON.stringify({ email, password, name: nome, businessName: attivita, businessType: tipo })
       });
-    } catch (err) {
-      console.error('Error submitting access request to API:', err);
-    }
+      
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Errore durante la registrazione');
+      }
 
-    const body = `Nome: ${nome}\nAttività: ${attivita}\nTipo: ${tipo}\nEmail: ${email}\n\nAccetto di essere contattato per l’accesso pilota di ReviewDesk.`;
-    setEsito('Richiesta registrata con successo nel sistema ReviewDesk! Apro la tua email per inviare la conferma a info@sititicino.ch.');
-    window.location.href = `mailto:info@sititicino.ch?subject=${encodeURIComponent('Richiesta accesso pilota ReviewDesk')}&body=${encodeURIComponent(body)}`;
+      setEsito('Registrazione completata con successo! Ora puoi accedere alla tua dashboard.');
+      // Clear form
+      setNome('');
+      setAttivita('');
+      setEmail('');
+      setPassword('');
+      setOkConsent(false);
+    } catch (err: any) {
+      console.error('Registration error:', err);
+      setErrore(err.message || 'Errore di connessione al server.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const currentUrl = encodeURIComponent(window.location.href.split('#')[0]);
@@ -188,6 +210,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenDashboard }) => 
                 className="w-full p-2.5 border border-[#C9CEC8] rounded-[6px] text-[15px] bg-white text-[#1C2321]"
               />
 
+              <label htmlFor="pass" className="block text-[14px] font-semibold mb-1 mt-3">Password</label>
+              <input 
+                type="password" 
+                id="pass" 
+                value={password} 
+                onChange={e => setPassword(e.target.value)} 
+                required 
+                minLength={6}
+                placeholder="Minimo 6 caratteri"
+                className="w-full p-2.5 border border-[#C9CEC8] rounded-[6px] text-[15px] bg-white text-[#1C2321]"
+              />
+
               <label className="flex gap-2.5 items-start font-normal text-[14px] text-[#586159] mt-4 cursor-pointer">
                 <input 
                   type="checkbox" 
@@ -197,16 +231,34 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenDashboard }) => 
                   required
                   className="mt-1"
                 />
-                <span>Accetto che mi contattiate per l'iscrizione gratuita. Userete i miei dati solo per rispondermi.</span>
+                <span>Accetto i termini e le condizioni d'uso. I tuoi dati verranno trattati secondo la normativa vigente.</span>
               </label>
 
-              <button type="submit" className="w-full mt-5 bg-[#1F5F4A] hover:bg-[#174A39] text-white font-semibold py-3 px-5 rounded-[6px] text-[16px] transition cursor-pointer">
-                Iscriviti gratis
+              <button 
+                type="submit" 
+                disabled={loading}
+                className="w-full mt-5 bg-[#1F5F4A] hover:bg-[#174A39] text-white font-semibold py-3 px-5 rounded-[6px] text-[16px] transition cursor-pointer disabled:opacity-50"
+              >
+                {loading ? 'Registrazione...' : 'Iscriviti gratis'}
               </button>
 
-              {esito && <p id="esito" className="font-semibold text-[#1F5F4A] text-sm mt-3" role="status">{esito}</p>}
+              {esito && (
+                <div className="mt-4 p-3 bg-[#E8F0EC] border border-[#1F5F4A]/30 rounded-[6px]">
+                  <p className="font-semibold text-[#1F5F4A] text-sm" role="status">{esito}</p>
+                  <button 
+                    onClick={onOpenDashboard}
+                    className="mt-2 text-xs font-bold text-[#1F5F4A] underline flex items-center gap-1"
+                  >
+                    Vai al login <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
 
-              <p className="text-[13px] text-[#586159] mt-3">Si aprirà la tua email già compilata, da inviare a info@sititicino.ch.</p>
+              {errore && (
+                <div className="mt-4 p-3 bg-[#B3382C]/10 border border-[#B3382C]/30 rounded-[6px]">
+                  <p className="font-semibold text-[#B3382C] text-sm" role="alert">{errore}</p>
+                </div>
+              )}
             </form>
           </div>
         </section>

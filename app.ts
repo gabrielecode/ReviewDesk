@@ -4,6 +4,7 @@ import { users, businesses, reviews, requests, pilotRequests, appSettings } from
 import { eq, and, inArray, desc } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
 import { getOrCreateUser } from './src/db/users.ts';
+import { adminAuth } from './src/lib/firebase-admin.ts';
 import dns from 'dns';
 import net from 'net';
 import { URL } from 'url';
@@ -11,6 +12,17 @@ import { createHash } from 'crypto';
 
 const app = express();
 app.use(express.json());
+
+console.log('Database configuration check:');
+console.log('SQL_HOST:', process.env.SQL_HOST ? 'Present' : 'Missing');
+console.log('SQL_USER:', process.env.SQL_USER ? 'Present' : 'Missing');
+console.log('SQL_DB_NAME:', process.env.SQL_DB_NAME ? 'Present' : 'Missing');
+
+// Request logging
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  next();
+});
 
 // Rate limiting map
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -61,6 +73,58 @@ async function setSignupsOpenDb(open: boolean): Promise<void> {
       });
   } catch {}
 }
+
+// Public registration route
+app.post('/api/public/register', async (req, res) => {
+  try {
+    const { email, password, name, businessName, businessType } = req.body;
+    
+    if (!email || !password || !name || !businessName) {
+      return res.status(400).json({ error: 'Tutti i campi sono obbligatori.' });
+    }
+
+    const signupsOpen = await getSignupsOpen();
+    if (!signupsOpen) {
+      return res.status(403).json({ error: 'Le registrazioni sono attualmente chiuse.' });
+    }
+
+    // 1. Create Firebase User
+    const userRecord = await adminAuth.createUser({
+      email: String(email).trim().toLowerCase(),
+      password: String(password),
+      displayName: String(name).trim(),
+    });
+
+    const userId = userRecord.uid;
+
+    // 2. Create User in our DB
+    await getOrCreateUser(userId, userRecord.email || '');
+
+    // 3. Create Business
+    const businessId = 'biz-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+    await db.insert(businesses).values({
+      id: businessId,
+      userId: userId,
+      name: String(businessName).trim(),
+      category: String(businessType || 'Altro').trim(),
+      location: 'Ticino', // Default
+      signerName: String(name).trim().split(' ')[0] || 'Staff',
+      tone: 'caloroso',
+      defaultLanguage: 'it',
+      isConnected: false,
+      smsTemplate: `Buongiorno {nome}, grazie per averci scelto! Lasciaci una recensione su Google qui: {link}`,
+    });
+
+    res.json({ 
+      success: true, 
+      message: 'Registrazione completata con successo! Ora puoi accedere.',
+      userId 
+    });
+  } catch (error: any) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: error.message || 'Errore durante la registrazione.' });
+  }
+});
 
 app.get('/api/health', (req, res) => {
   const openRouterConfigured = !!process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.trim() !== '';
@@ -708,6 +772,16 @@ app.post('/api/admin/config', requireAuth, async (req: AuthRequest, res) => {
 
 app.use('/api/*', (req, res) => {
   res.status(404).json({ error: 'Endpoint non trovato' });
+});
+
+// Global error handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ 
+    error: 'Errore interno del server',
+    message: err.message,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
 });
 
 export default app;

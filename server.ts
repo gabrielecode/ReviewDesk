@@ -1,4 +1,4 @@
-import app from './app.js';
+import app from './app.ts';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
