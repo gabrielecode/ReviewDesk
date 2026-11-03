@@ -15,12 +15,14 @@ interface ReviewsTabProps {
   business: Business;
   reviews: Review[];
   onRefreshReviews: () => void;
+  onImportReviews?: (imported: Review[], businessId: string, updatedFields?: Partial<Business>) => void;
 }
 
 export const ReviewsTab: React.FC<ReviewsTabProps> = ({
   business,
   reviews,
   onRefreshReviews,
+  onImportReviews
 }) => {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterStars, setFilterStars] = useState<number | 'all'>('all');
@@ -57,7 +59,16 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
 
       if (res.ok) {
         const data = await res.json();
-        onRefreshReviews();
+        if (Array.isArray(data.reviews) && data.reviews.length > 0 && onImportReviews) {
+          onImportReviews(data.reviews, business.id, {
+            isConnected: true,
+            lastSyncAt: data.lastSyncAt || new Date().toISOString(),
+            googlePlaceId: data.googlePlaceId || business.googlePlaceId,
+            googleUrl: data.resolvedUrl || business.googleUrl
+          });
+        } else {
+          onRefreshReviews();
+        }
         setSyncBannerMsg(data.message || 'Recensioni storiche sincronizzate con successo!');
       } else {
         onRefreshReviews();

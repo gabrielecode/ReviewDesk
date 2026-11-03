@@ -130,6 +130,32 @@ export default function App() {
     }
   };
 
+  const handleImportReviews = async (newReviews: Review[], businessId: string, updatedBusinessFields?: Partial<Business>) => {
+    if (!session?.user?.id || !Array.isArray(newReviews) || newReviews.length === 0) return;
+
+    let updatedBusinesses = businesses;
+    if (updatedBusinessFields) {
+      updatedBusinesses = businesses.map(b => b.id === businessId ? { ...b, ...updatedBusinessFields } : b);
+      setBusinesses(updatedBusinesses);
+    }
+
+    const otherReviews = reviews.filter(
+      r => r.businessId !== businessId || (!r.id.includes('-rev-') && !r.id.includes('-hist-') && !r.id.includes('g-rev-'))
+    );
+
+    const existingIds = new Set(otherReviews.map(r => r.id));
+    const filteredNew = newReviews.filter(r => !existingIds.has(r.id));
+    const combinedReviews = [...filteredNew, ...otherReviews];
+
+    setReviews(combinedReviews);
+
+    await saveAppData(session.user.id, {
+      businesses: updatedBusinesses,
+      reviews: combinedReviews,
+      requests
+    });
+  };
+
   const handleClearDemoData = async () => {
     if (!session?.user?.id) return;
     if (!confirm('Eliminare i dati demo fittizi? Verranno rimossi i profili e le recensioni fittizie di prova.')) return;
@@ -428,6 +454,7 @@ export default function App() {
               business={currentBusiness}
               reviews={currentReviews}
               onRefreshReviews={handleRefreshReviews}
+              onImportReviews={handleImportReviews}
             />
           )}
 
@@ -455,6 +482,7 @@ export default function App() {
               business={currentBusiness}
               onUpdateBusiness={handleUpdateBusiness}
               onRefreshReviews={handleRefreshReviews}
+              onImportReviews={handleImportReviews}
               onClearDemoData={handleClearDemoData}
               onResetData={handleResetData}
             />
@@ -474,6 +502,7 @@ export default function App() {
         business={currentBusiness}
         onUpdateBusiness={handleUpdateBusiness}
         onRefreshReviews={handleRefreshReviews}
+        onImportReviews={handleImportReviews}
         onNavigateToSettings={() => {
           setIsConnectionModalOpen(false);
           setActiveTab('settings');

@@ -284,7 +284,25 @@ export async function getAppData(userId: string): Promise<AppData> {
       const requests = (reqRes.data || []).map(mapRequestFromDb);
 
       if (businesses.length > 0) {
-        const fullData = { businesses, reviews, requests };
+        // Merge with LocalStorage to preserve any imported reviews
+        const cachedStr = localStorage.getItem(cacheKey);
+        let mergedReviews = reviews;
+        if (cachedStr) {
+          try {
+            const cached = JSON.parse(cachedStr);
+            if (Array.isArray(cached.reviews) && cached.reviews.length > 0) {
+              const dbRevMap = new Map(reviews.map(r => [r.id, r]));
+              for (const cr of cached.reviews) {
+                if (!dbRevMap.has(cr.id)) {
+                  dbRevMap.set(cr.id, cr);
+                }
+              }
+              mergedReviews = Array.from(dbRevMap.values());
+            }
+          } catch {}
+        }
+
+        const fullData = { businesses, reviews: mergedReviews, requests };
         localStorage.setItem(cacheKey, JSON.stringify(fullData));
         return fullData;
       }

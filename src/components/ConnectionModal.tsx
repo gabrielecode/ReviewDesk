@@ -10,6 +10,7 @@ interface ConnectionModalProps {
   onUpdateBusiness: (updated: Partial<Business>) => void;
   onNavigateToSettings?: () => void;
   onRefreshReviews?: () => void;
+  onImportReviews?: (imported: any[], businessId: string, updatedFields?: Partial<Business>) => void;
 }
 
 export const ConnectionModal: React.FC<ConnectionModalProps> = ({
@@ -18,7 +19,8 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   business,
   onUpdateBusiness,
   onNavigateToSettings,
-  onRefreshReviews
+  onRefreshReviews,
+  onImportReviews
 }) => {
   if (!isOpen || !business) return null;
 
@@ -97,7 +99,12 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
           setPlaceId(data.googlePlaceId);
         }
 
-        onUpdateBusiness(updatedFields);
+        if (Array.isArray(data.reviews) && data.reviews.length > 0 && onImportReviews) {
+          onImportReviews(data.reviews, business.id, updatedFields);
+        } else {
+          onUpdateBusiness(updatedFields);
+        }
+
         if (onRefreshReviews) onRefreshReviews();
 
         setSyncSuccess(true);

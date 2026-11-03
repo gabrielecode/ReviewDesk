@@ -7,6 +7,7 @@ interface SettingsTabProps {
   business: Business;
   onUpdateBusiness: (updated: Partial<Business>) => void;
   onRefreshReviews?: () => void;
+  onImportReviews?: (imported: any[], businessId: string, updatedFields?: Partial<Business>) => void;
   onClearDemoData?: () => void;
   onResetData?: () => void;
 }
@@ -15,6 +16,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   business,
   onUpdateBusiness,
   onRefreshReviews,
+  onImportReviews,
   onClearDemoData,
   onResetData
 }) => {
@@ -81,7 +83,12 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
           ...prev,
           ...updatedFields
         }));
-        onUpdateBusiness(updatedFields);
+
+        if (Array.isArray(data.reviews) && data.reviews.length > 0 && onImportReviews) {
+          onImportReviews(data.reviews, business.id, updatedFields);
+        } else {
+          onUpdateBusiness(updatedFields);
+        }
 
         if (onRefreshReviews) onRefreshReviews();
 
