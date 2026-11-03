@@ -223,13 +223,24 @@ app.get('/api/data', requireAuth, async (req: AuthRequest, res) => {
     
     if (bizs.length > 0) {
       const bizIds = bizs.map(b => b.id);
-      revs = await db.select().from(reviews).where(inArray(reviews.businessId, bizIds));
-      reqs = await db.select().from(requests).where(inArray(requests.businessId, bizIds));
+      revs = await db.select().from(reviews).where(inArray(reviews.businessId, bizIds)).catch(e => {
+        console.error('Reviews fetch error:', e);
+        return [];
+      });
+      reqs = await db.select().from(requests).where(inArray(requests.businessId, bizIds)).catch(e => {
+        console.error('Requests fetch error:', e);
+        return [];
+      });
     }
     
     res.json({ businesses: bizs, reviews: revs, requests: reqs });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error('API Data error:', error);
+    res.status(500).json({ 
+      error: 'Errore nel caricamento dei dati.',
+      message: error.message || 'Errore interno',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 

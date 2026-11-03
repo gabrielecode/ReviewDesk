@@ -19,7 +19,16 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
   };
 
   const res = await fetch(url, { ...options, headers });
-  const data = await res.json();
+  
+  let data;
+  const contentType = res.headers.get('content-type');
+  if (contentType && contentType.includes('application/json')) {
+    data = await res.json();
+  } else {
+    const text = await res.text();
+    console.error('Non-JSON response received:', text);
+    throw new Error(`Risposta del server non valida (HTML). Il server potrebbe essere spento o in errore.`);
+  }
   
   if (!res.ok) {
     throw new Error(data.error || 'Errore nella richiesta al server');
