@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowRight, Star, Check, Globe, Share2, Mail, MessageCircle, Linkedin, Facebook } from 'lucide-react';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface LandingPageProps {
   onOpenDashboard: () => void;
@@ -75,6 +76,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenDashboard }) => 
               <li><a href="#chi-siamo" className="hover:text-[#1C2321] transition">Chi siamo</a></li>
               <li><a href="#faq" className="hover:text-[#1C2321] transition">Domande</a></li>
               <li>
+                <PWAInstallButton variant="compact" />
+              </li>
+              <li>
                 <button 
                   onClick={onOpenDashboard}
                   className="bg-[#E8F0EC] text-[#1F5F4A] hover:bg-[#d8e8e0] px-3 py-1.5 rounded-[6px] font-semibold text-[14px] transition"
@@ -90,6 +94,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenDashboard }) => 
             </ul>
           </nav>
           <div className="flex md:hidden items-center gap-2">
+            <PWAInstallButton variant="compact" />
             <button 
               onClick={onOpenDashboard}
               className="bg-[#1F5F4A] text-white px-3 py-1.5 rounded-[6px] text-xs font-semibold"

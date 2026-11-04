@@ -13,7 +13,10 @@ if (!process.env.VERCEL) {
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { 
+        middlewareMode: true,
+        hmr: false,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -25,8 +28,16 @@ if (!process.env.VERCEL) {
   }
 
   const numericPort = Number(PORT) || 3000;
-  app.listen(numericPort, '0.0.0.0', () => {
+  const server = app.listen(numericPort, '0.0.0.0', () => {
     console.log(`ReviewDesk server running on port ${numericPort}`);
+  });
+
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Port ${numericPort} is already in use. Please stop the existing process.`);
+    } else {
+      console.error('Server error:', err);
+    }
   });
 }
 

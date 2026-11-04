@@ -9,6 +9,7 @@ import dns from 'dns';
 import net from 'net';
 import { URL } from 'url';
 import { createHash } from 'crypto';
+import { GoogleGenAI, Type } from "@google/genai";
 
 const app = express();
 app.use(express.json());
@@ -134,6 +135,8 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+
+
 // Sync user on every auth request
 app.use('/api/*', async (req, res, next) => {
   if (req.path === '/api/health' || req.path === '/api/request-access') return next();
@@ -160,6 +163,8 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs = 25000): Promise<T
     throw err;
   }
 }
+
+
 
 function buildSmartDraftReply(reviewText: string, author: string, stars: number, biz: any): string {
   const name = biz.name || 'Attività';
@@ -276,10 +281,16 @@ app.post('/api/businesses', requireAuth, async (req: AuthRequest, res) => {
         googlePlaceId: b.googlePlaceId,
         googleAccountId: b.googleAccountId,
         googleLocationId: b.googleLocationId,
-        googleApiKey: b.googleApiKey,
+        // googleApiKey: b.googleApiKey, // MODIFICATO: deprecato
         syncFrequency: b.syncFrequency || 'daily',
         autoSyncReviews: b.autoSyncReviews ?? true,
-        lastSyncAt: b.lastSyncAt
+        lastSyncAt: b.lastSyncAt,
+        notifyNegativeReviews: b.notifyNegativeReviews ?? true,
+        notifyEmailEnabled: b.notifyEmailEnabled ?? true,
+        notifyEmailAddress: b.notifyEmailAddress,
+        notifyDashboardEnabled: b.notifyDashboardEnabled ?? true,
+        notifyResponseTargetHours: b.notifyResponseTargetHours ?? 12,
+        notifyAutoDraft: b.notifyAutoDraft ?? true,
       })
       .onConflictDoUpdate({
         target: businesses.id,
@@ -298,10 +309,16 @@ app.post('/api/businesses', requireAuth, async (req: AuthRequest, res) => {
           googlePlaceId: b.googlePlaceId,
           googleAccountId: b.googleAccountId,
           googleLocationId: b.googleLocationId,
-          googleApiKey: b.googleApiKey,
+          // googleApiKey: b.googleApiKey, // MODIFICATO: deprecato
           syncFrequency: b.syncFrequency,
           autoSyncReviews: b.autoSyncReviews,
-          lastSyncAt: b.lastSyncAt
+          lastSyncAt: b.lastSyncAt,
+          notifyNegativeReviews: b.notifyNegativeReviews,
+          notifyEmailEnabled: b.notifyEmailEnabled,
+          notifyEmailAddress: b.notifyEmailAddress,
+          notifyDashboardEnabled: b.notifyDashboardEnabled,
+          notifyResponseTargetHours: b.notifyResponseTargetHours,
+          notifyAutoDraft: b.notifyAutoDraft,
         }
       });
       
@@ -329,6 +346,22 @@ app.patch('/api/reviews/:id', requireAuth, async (req: AuthRequest, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+app.delete('/api/businesses/:businessId/reviews', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { businessId } = req.params;
+    
+    // Ownership check
+    const [biz] = await db.select().from(businesses).where(and(eq(businesses.id, businessId), eq(businesses.userId, req.user!.uid)));
+    if (!biz) return res.status(403).json({ error: 'Non autorizzato' });
+    
+    await db.delete(reviews).where(eq(reviews.businessId, businessId));
+    res.json({ success: true, message: 'Recensioni eliminate con successo.' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 app.post('/api/requests', requireAuth, async (req: AuthRequest, res) => {
   try {
@@ -365,16 +398,20 @@ app.post('/api/draft-reply', requireAuth, rateLimiter, async (req: AuthRequest, 
     const authorName = author || 'Cliente';
     const ratingStars = typeof stars === 'number' ? stars : 5;
 
-    if (process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.trim() !== '') {
-      try {
-        const { name, category, location, signerName, tone, privateContact, defaultLanguage } = business;
-        const langInstruction = 
-          defaultLanguage === 'de' ? 'Scrivi rigorosamente in lingua tedesca.' :
-          defaultLanguage === 'en' ? 'Scrivi rigorosamente in lingua inglese.' :
-          defaultLanguage === 'it' ? 'Scrivi rigorosamente in lingua italiana.' :
-          'Rispondi nella stessa lingua in cui è scritta la recensione (auto).';
+    try {
+      const ai = new GoogleGenAI({
+        apiKey: process.env.GEMINI_API_KEY || '',
+        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+      });
 
-        const systemPrompt = `Sei l'assistente virtuale di "${name || 'Attività'}" (${category || ''}, a ${location || ''}).
+      const { name, category, location, signerName, tone, privateContact, defaultLanguage } = business;
+      const langInstruction = 
+        defaultLanguage === 'de' ? 'Scrivi rigorosamente in lingua tedesca.' :
+        defaultLanguage === 'en' ? 'Scrivi rigorosamente in lingua inglese.' :
+        defaultLanguage === 'it' ? 'Scrivi rigorosamente in lingua italiana.' :
+        'Rispondi nella stessa lingua in cui è scritta la recensione (auto).';
+
+      const systemPrompt = `Sei l'assistente virtuale di "${name || 'Attività'}" (${category || ''}, a ${location || ''}).
 Devi scrivere una bozza di risposta professionale per una recensione Google lasciata da ${authorName} (${ratingStars} stelle).
 
 Regole tassative:
@@ -386,37 +423,18 @@ Regole tassative:
 6. ${ratingStars <= 2 ? 'ATTENZIONE: Recensione negativa. Ringrazia per il feedback, mostra empatia, non cercare scuse e invita gentilmente a contattare l\'attività in privato (' + (privateContact || 'contatto privato') + ').' : 'Ringrazia calorosamente il cliente.'}
 7. Restituisci SOLO il testo della risposta pronto per essere pubblicato, senza virgolette e senza commenti extra.`;
 
-        const userContent = `<recensione>\nAutore: ${authorName}\nStelle: ${ratingStars}\nTesto: ${reviewText || '(Nessun testo, solo votazione a stelle)'}\n</recensione>`;
+      const userContent = `<recensione>\nAutore: ${authorName}\nStelle: ${ratingStars}\nTesto: ${reviewText || '(Nessun testo, solo votazione a stelle)'}\n</recensione>`;
 
-        const response = await withTimeout(
-          fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-              'HTTP-Referer': 'https://reviewdesk.app',
-              'X-Title': 'ReviewDesk',
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              model: 'openai/gpt-4o-mini',
-              max_tokens: 300,
-              temperature: 0.7,
-              messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: userContent }
-              ]
-            })
-          })
-        );
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: userContent,
+        config: { systemInstruction: systemPrompt }
+      });
 
-        if (response.ok) {
-          const data = await response.json();
-          const draft = data.choices?.[0]?.message?.content?.trim();
-          if (draft) return res.json({ draft });
-        }
-      } catch (orErr) {
-        console.warn('OpenRouter draft failed:', orErr);
-      }
+      const draft = response.text?.trim();
+      if (draft) return res.json({ draft });
+    } catch (aiErr) {
+      console.warn('Gemini draft failed:', aiErr);
     }
 
     const draft = buildSmartDraftReply(reviewText || '', authorName, ratingStars, business);
@@ -434,58 +452,51 @@ app.post('/api/insights', requireAuth, rateLimiter, async (req: AuthRequest, res
 
     const revs = await db.select().from(reviews).where(eq(reviews.businessId, business.id)).limit(30);
 
-    if (process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.trim() !== '') {
-      try {
-        const reviewsSummary = revs.map((r: any) => {
-          const txt = typeof r.text === 'string' ? r.text.substring(0, 400) : '';
-          return `[${r.stars || 5} stelle] ${txt || 'Solo stelle'}`;
-        }).join('\n');
+    try {
+      const ai = new GoogleGenAI({
+        apiKey: process.env.GEMINI_API_KEY || '',
+        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+      });
 
-        const systemPrompt = `Analizza le seguenti recensioni Google per l'attività "${business.name}" (${business.category}):
+      const reviewsSummary = revs.map((r: any) => {
+        const txt = typeof r.text === 'string' ? r.text.substring(0, 400) : '';
+        return `[${r.stars || 5} stelle] ${txt || 'Solo stelle'}`;
+      }).join('\n');
+
+      const systemPrompt = `Analizza le seguenti recensioni Google per l'attività "${business.name}" (${business.category}):
 <recensioni>
 ${reviewsSummary}
 </recensioni>
 
 Restituisci un oggetto JSON con questa esatta struttura:
 {
-  \"strengths\": [\"punto di forza 1\", \"punto di forza 2\", \"punto di forza 3\"],
-  \"improvements\": [\"area di miglioramento 1\", \"area di miglioramento 2\"]
+  "strengths": ["punto di forza 1", "punto di forza 2", "punto di forza 3"],
+  "improvements": ["area di miglioramento 1", "area di miglioramento 2"]
 }
 Scrivi in italiano chiaro e sintetico.`;
 
-        const response = await withTimeout(
-          fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-              'HTTP-Referer': 'https://reviewdesk.app',
-              'X-Title': 'ReviewDesk',
-              'Content-Type': 'application/json'
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: 'Analizza le recensioni.',
+        config: {
+          systemInstruction: systemPrompt,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
+              improvements: { type: Type.ARRAY, items: { type: Type.STRING } }
             },
-            body: JSON.stringify({
-              model: 'openai/gpt-4o-mini',
-              max_tokens: 500,
-              temperature: 0.7,
-              response_format: { type: 'json_object' },
-              messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: 'Restituisci l\'analisi JSON richiesta.' }
-              ]
-            })
-          })
-        );
-
-        if (response.ok) {
-          const data = await response.json();
-          const content = data.choices?.[0]?.message?.content || '{}';
-          const parsed = JSON.parse(content);
-          if (Array.isArray(parsed.strengths) && Array.isArray(parsed.improvements)) {
-            return res.json(parsed);
+            required: ['strengths', 'improvements']
           }
         }
-      } catch (orErr) {
-        console.warn('OpenRouter insights failed:', orErr);
-      }
+      });
+
+      const content = response.text || '{}';
+      const parsed = JSON.parse(content);
+      return res.json(parsed);
+    } catch (aiErr) {
+      console.warn('Gemini insights failed:', aiErr);
     }
 
     return res.json({ strengths: [], improvements: [] });
@@ -494,6 +505,8 @@ Scrivi in italiano chiaro e sintetico.`;
     return res.json({ strengths: [], improvements: [] });
   }
 });
+
+
 
 async function isPrivateIp(hostname: string): Promise<boolean> {
   if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return true;
@@ -587,99 +600,155 @@ app.post('/api/sync-google-reviews', requireAuth, rateLimiter, async (req: AuthR
     const businessId = body.businessId;
     const googlePlaceId = (body.googlePlaceId || dbBiz.googlePlaceId || '').replace(/^places\//, '');
     const googleUrl = body.googleUrl || dbBiz.googleUrl || '';
-    const mapsApiKey = body.apiKey || dbBiz.googleApiKey || process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;
     const businessName = body.businessName || dbBiz.name;
     const location = body.location || dbBiz.location;
+    const force = body.force === true;
 
-    if (!mapsApiKey) {
-      return res.status(400).json({ success: false, message: 'Chiave API Google Maps mancante. Inseriscila nelle impostazioni.' });
+    // Cache logic: se lastSyncAt < 30 min e non è forzato, non chiamare il provider
+    if (!force && dbBiz.lastSyncAt) {
+      const lastSync = new Date(dbBiz.lastSyncAt).getTime();
+      const now = Date.now();
+      if (now - lastSync < 30 * 60 * 1000) {
+        return res.json({
+          success: true,
+          count: 0,
+          updatedCount: 0,
+          alreadyPresent: 0,
+          reviews: [],
+          resolvedUrl: googleUrl,
+          googlePlaceId: googlePlaceId,
+          lastSyncAt: dbBiz.lastSyncAt,
+          message: 'Recensioni già aggiornate pochi minuti fa'
+        });
+      }
     }
 
     let resolvedPlaceId = googlePlaceId;
     let resolvedUrl = googleUrl;
+    let providerInput: any = {};
 
-    if (!resolvedPlaceId) {
-      if (googleUrl) {
-        const urlInfo = await resolveGoogleShareUrl(googleUrl);
-        resolvedPlaceId = urlInfo.extractedPlaceId || '';
-        resolvedUrl = urlInfo.resolvedUrl || googleUrl;
-      }
-      
-      if (!resolvedPlaceId) {
-        const searchQuery = `${businessName} ${location}`;
-        const searchRes = await fetch('https://places.googleapis.com/v1/places:searchText', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Goog-Api-Key': mapsApiKey,
-            'X-Goog-FieldMask': 'places.id,places.displayName'
-          },
-          body: JSON.stringify({ textQuery: searchQuery })
-        });
-        
-        if (searchRes.ok) {
-          const searchData = await searchRes.json();
-          if (searchData.places && searchData.places.length > 0) {
-            resolvedPlaceId = searchData.places[0].id;
-          }
-        }
-      }
+    if (resolvedPlaceId) {
+      providerInput.placeId = resolvedPlaceId;
+    } else if (googleUrl) {
+      const urlInfo = await resolveGoogleShareUrl(googleUrl);
+      resolvedPlaceId = urlInfo.extractedPlaceId || '';
+      resolvedUrl = urlInfo.resolvedUrl || googleUrl;
+      providerInput.googleUrl = resolvedUrl;
+    } else {
+      providerInput.query = `${businessName} ${location}`;
     }
 
-    if (!resolvedPlaceId) {
-      return res.status(400).json({ success: false, message: 'Impossibile trovare il Place ID per questa attività. Inseriscilo manualmente nelle impostazioni.' });
-    }
-
-    const placesApiUrl = `https://places.googleapis.com/v1/places/${encodeURIComponent(resolvedPlaceId)}`;
-    const pRes = await fetch(placesApiUrl, {
-      headers: {
-        'X-Goog-Api-Key': mapsApiKey,
-        'X-Goog-FieldMask': 'displayName,rating,reviews'
-      }
-    });
-
-    if (!pRes.ok) {
-      const pErr = await pRes.json();
-      return res.status(502).json({ success: false, message: pErr.error?.message || 'Errore durante la chiamata alle API di Google.' });
-    }
-
-    const pData = await pRes.json();
-    const rawReviews = pData.reviews || [];
+    const { getReviewsFromProvider } = await import('./server/reviews-provider.ts');
+    const providerResult = await getReviewsFromProvider(providerInput);
+    
+    resolvedPlaceId = providerResult.placeId || resolvedPlaceId;
+    const rawReviews = providerResult.reviews || [];
 
     const existingRevs = await db.select().from(reviews).where(eq(reviews.businessId, businessId));
-    const existingMap = new Map<string, { author: string, text: string }>();
-    existingRevs.forEach(r => {
-      existingMap.set(r.id, { author: r.author, text: r.text || '' });
-    });
 
     const newRevs: any[] = [];
     let alreadyPresent = 0;
+    let updatedCount = 0;
+    const updatedReviewIds = new Set<string>();
 
+    const formatReplyDate = (rawDate?: string): string => {
+      const today = new Date().toISOString().split('T')[0];
+      if (!rawDate) return today;
+      const trimmed = String(rawDate).trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+        return trimmed.slice(0, 10);
+      }
+      const d = new Date(trimmed);
+      if (!isNaN(d.getTime())) {
+        return d.toISOString().split('T')[0];
+      }
+      return today;
+    };
+
+    const suspiciousNames = ['mario rossi', 'luisa verdi', 'john doe', 'jane doe', 'test user', 'cliente google'];
     for (const rev of rawReviews) {
-      const author = rev.authorAttribution?.displayName || 'Cliente Google';
-      const text = rev.text?.text || '';
+      const author = rev.author || 'Cliente Google';
+      const text = rev.text || '';
       const rating = rev.rating || 5;
-      const publishTime = rev.publishTime ? rev.publishTime.split('T')[0] : new Date().toISOString().split('T')[0];
+      const publishTime = rev.publishedAt ? rev.publishedAt.split('T')[0] : new Date().toISOString().split('T')[0];
       
-      const contentForHash = `${rev.name || author}|${publishTime}|${text}`;
-      const stableId = `g-rev-${businessId}-${createHash('sha1').update(contentForHash).digest('hex').slice(0, 20)}`;
-
-      const isDuplicate = existingMap.has(stableId) || Array.from(existingMap.values()).some(e => e.author === author && e.text.slice(0, 80) === text.slice(0, 80));
-
-      if (isDuplicate) {
-        alreadyPresent++;
+      // Filtra nomi sospetti che indicano allucinazione dell'AI
+      if (suspiciousNames.includes(author.toLowerCase().trim()) && text.length < 100) {
+        console.warn(`Filtro allucinazione AI: saltata recensione di "${author}"`);
         continue;
       }
 
-      newRevs.push({
+      // Logica stableId: sha1 di autore+data+testo
+      const contentForHash = `${author}|${publishTime}|${text}`;
+      const stableId = `g-rev-${businessId}-${createHash('sha1').update(contentForHash).digest('hex').slice(0, 20)}`;
+
+      const existingReview = existingRevs.find(r => 
+        r.id === stableId || 
+        (r.author === author && (r.text || '').slice(0, 80) === text.slice(0, 80))
+      );
+
+      const hasOwnerReply = Boolean(rev.ownerReply?.text && rev.ownerReply.text.trim().length > 0);
+
+      if (existingReview) {
+        alreadyPresent++;
+
+        // TASK 3: Se una recensione già in DB ha status 'da_rispondere' o 'bozza_pronta' e il provider ora restituisce ownerReply.text,
+        // aggiornala a 'pubblicata' con replyText e replyDate. Non toccare quelle già 'pubblicata'.
+        if (
+          hasOwnerReply &&
+          !updatedReviewIds.has(existingReview.id) &&
+          (existingReview.status === 'da_rispondere' || existingReview.status === 'bozza_pronta')
+        ) {
+          const replyText = rev.ownerReply!.text.trim();
+          const replyDate = formatReplyDate(rev.ownerReply?.date);
+
+          await db.update(reviews).set({
+            status: 'pubblicata',
+            replyText,
+            replyDate
+          }).where(eq(reviews.id, existingReview.id));
+
+          existingReview.status = 'pubblicata';
+          existingReview.replyText = replyText;
+          existingReview.replyDate = replyDate;
+          updatedReviewIds.add(existingReview.id);
+          updatedCount++;
+        }
+
+        continue;
+      }
+
+      // TASK 2: nuove recensioni
+      // Se ownerReply.text esiste: status 'pubblicata', replyText = testo, replyDate = data (YYYY-MM-DD, oggi se manca). Altrimenti resta 'da_rispondere'.
+      const status = hasOwnerReply ? 'pubblicata' : 'da_rispondere';
+      const newReviewData: any = {
         id: stableId,
         businessId: businessId,
         author,
         stars: rating,
         text,
         date: publishTime,
-        status: 'da_rispondere'
-      });
+        status
+      };
+
+      if (hasOwnerReply) {
+        newReviewData.replyText = rev.ownerReply!.text.trim();
+        newReviewData.replyDate = formatReplyDate(rev.ownerReply?.date);
+      } else if (rating <= 2 && dbBiz.notifyAutoDraft !== false) {
+        // Pre-genera bozza diplomatica per recensioni 1-2 stelle per velocizzare la risposta
+        const autoDraft = buildSmartDraftReply(text, author, rating, dbBiz);
+        if (autoDraft) {
+          newReviewData.status = 'bozza_pronta';
+          newReviewData.draftText = autoDraft;
+        }
+      }
+
+      newRevs.push(newReviewData);
+    }
+
+    const newNegativeCount = newRevs.filter(r => r.stars <= 2 && r.status !== 'pubblicata').length;
+    if (newNegativeCount > 0 && dbBiz.notifyNegativeReviews !== false) {
+      console.log(`[ALERT NOTIFICHE 1-2★] Rilevate ${newNegativeCount} nuove recensioni critiche per "${dbBiz.name}". Canale Email: ${dbBiz.notifyEmailEnabled !== false ? (dbBiz.notifyEmailAddress || req.user?.email || 'Attivo') : 'Disattivato'}, Dashboard: ${dbBiz.notifyDashboardEnabled !== false ? 'Attivo' : 'Disattivato'}`);
     }
 
     if (newRevs.length > 0) {
@@ -694,14 +763,23 @@ app.post('/api/sync-google-reviews', requireAuth, rateLimiter, async (req: AuthR
       googleUrl: resolvedUrl
     }).where(eq(businesses.id, businessId));
 
-    const message = newRevs.length === 0 
-      ? `Tutte le recensioni recenti sono già presenti. Nota: Google Places API fornisce solo le 5 recensioni più recenti.`
-      : `Sincronizzazione completata! Importate ${newRevs.length} nuove recensioni.`;
+    let message = '';
+    if (newRevs.length > 0 && updatedCount > 0) {
+      message = `Sincronizzazione completata! Importate ${newRevs.length} nuove recensioni e aggiornate ${updatedCount} con risposta del titolare.`;
+    } else if (newRevs.length > 0) {
+      message = `Sincronizzazione completata! Importate ${newRevs.length} nuove recensioni.`;
+    } else if (updatedCount > 0) {
+      message = `Sincronizzazione completata! Aggiornate ${updatedCount} recensioni con risposta del titolare.`;
+    } else {
+      message = `Tutte le recensioni recenti sono già presenti.`;
+    }
 
     return res.json({
       success: true,
       count: newRevs.length,
+      updatedCount,
       alreadyPresent,
+      newNegativeCount,
       reviews: newRevs,
       resolvedUrl,
       googlePlaceId: resolvedPlaceId,
@@ -711,7 +789,40 @@ app.post('/api/sync-google-reviews', requireAuth, rateLimiter, async (req: AuthR
 
   } catch (err: any) {
     console.error('Sync error:', err);
-    return res.status(500).json({ success: false, message: err.message || 'Errore interno.' });
+    return res.status(502).json({ success: false, message: err.message || 'Errore durante la sincronizzazione con il provider.' });
+  }
+});
+
+app.post('/api/notifications/test-negative-alert', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const business = await verifyBusinessOwnership(req, res);
+    if (!business) return;
+
+    const email = (req.body?.email || business.notifyEmailAddress || req.user?.email || '').trim();
+    const targetHours = business.notifyResponseTargetHours || 12;
+
+    const simulatedSample = {
+      author: 'Cliente Verificato (Test)',
+      stars: 1,
+      date: new Date().toISOString().split('T')[0],
+      text: 'Purtroppo l\'esperienza non ha risposto alle aspettative. Tempi di attesa eccessivi e scarsa disponibilità.',
+      suggestedAction: `Rispondere entro ${targetHours} ore per contenere il disservizio e invitare a un chiarimento privato.`,
+      draftReply: buildSmartDraftReply('Purtroppo l\'esperienza non ha risposto alle aspettative.', 'Cliente Verificato (Test)', 1, business)
+    };
+
+    console.log(`[TEST ALERT 1-2★] Inviato test notifica per "${business.name}" a ${email}. Canali: ${business.notifyEmailEnabled ? 'Email' : ''} ${business.notifyDashboardEnabled ? 'Dashboard' : ''}`);
+
+    res.json({
+      success: true,
+      message: `Simulazione completata con successo! Notifica di allerta per recensione negativa (1 stella) generata per "${business.name}".`,
+      sentToEmail: email,
+      emailEnabled: business.notifyEmailEnabled !== false,
+      dashboardEnabled: business.notifyDashboardEnabled !== false,
+      targetHours,
+      sample: simulatedSample
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Errore durante il test delle notifiche.' });
   }
 });
 
@@ -787,6 +898,20 @@ app.post('/api/admin/config', requireAuth, async (req: AuthRequest, res) => {
   }
   const current = await getSignupsOpen();
   res.json({ signupsOpen: current });
+});
+
+app.post('/api/tomtom/search', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { query } = req.body;
+    if (!query) return res.status(400).json({ error: 'Query di ricerca mancante.' });
+
+    const { searchTomTom } = await import('./server/reviews-provider.ts');
+    const results = await searchTomTom(query);
+
+    res.json({ success: true, results });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.use('/api/*', (req, res) => {

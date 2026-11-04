@@ -94,8 +94,15 @@ export async function resetAppData(userId: string): Promise<AppData> {
   return getAppData(userId);
 }
 
+export async function clearBusinessReviews(businessId: string): Promise<void> {
+  await fetchWithAuth(`/api/businesses/${businessId}/reviews`, {
+    method: 'DELETE'
+  });
+}
+
 export async function deleteMyAccount() {
   // Not implemented in this version yet, but would call a backend route
   await auth.currentUser?.delete();
   return { success: true };
 }
+

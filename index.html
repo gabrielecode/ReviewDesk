@@ -6,6 +6,19 @@
     <title>ReviewDesk – Gestione Recensioni Google per il Ticino</title>
     <meta name="description" content="ReviewDesk ti aiuta a rispondere alle recensioni Google in italiano, tedesco e inglese. Approva le bozze generate dall'IA e migliora la tua visibilità online.">
     <script>
+      // Suppress Vite HMR WebSocket errors in AI Studio iframe environment
+      window.addEventListener('error', function(e) {
+        if (e.message && (e.message.includes('WebSocket') || e.message.includes('ws://') || e.message.includes('wss://'))) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        if (e.reason && (String(e.reason).includes('WebSocket') || String(e.reason?.message || '').includes('WebSocket'))) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      });
       // Dynamic SEO tags for AI Studio environments
       (function() {
         const origin = window.location.origin;
@@ -16,7 +29,7 @@
         if (ogUrl) ogUrl.setAttribute('content', origin + '/');
       })();
     </script>
-    <link rel="canonical" href="https://reviewdesk.app/">
+    <link rel="canonical" href="https://reviewdesk.ai.studio/">
     <meta name="robots" content="index, follow, max-image-preview:large">
     <meta name="author" content="Connect & Create">
     <meta property="og:type" content="website">
@@ -24,18 +37,24 @@
     <meta property="og:site_name" content="ReviewDesk">
     <meta property="og:title" content="ReviewDesk: Risposte Intelligenti alle Recensioni Google">
     <meta property="og:description" content="Ottimizza la gestione delle recensioni per il tuo ristorante o salone in Ticino. Bozze professionali in 3 lingue.">
-    <meta property="og:url" content="https://reviewdesk.app/">
+    <meta property="og:url" content="https://reviewdesk.ai.studio/">
     <meta property="og:image" content="/assets/aistudio/image_062d0a52.png">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="theme-color" content="#1F5F4A">
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231F5F4A'/%3E%3Cpath d='M9 10h14v9h-8l-4 4v-4H9z' fill='%23fff'/%3E%3C/svg%3E">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="ReviewDesk">
+    <link rel="apple-touch-icon" href="/assets/aistudio/Geometric_letter_R_logo_design_1d946495__1__2af70099.jpg">
+    <link rel="icon" type="image/jpeg" href="/assets/aistudio/Geometric_letter_R_logo_design_1d946495__1__2af70099.jpg">
+    <link rel="manifest" href="/manifest.webmanifest">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script type="application/ld+json">
     {"@context":"https://schema.org","@graph":[
     {"@type":"Organization","@id":"https://sititicino.ch/#org","name":"Connect & Create","url":"https://sititicino.ch","founder":{"@type":"Person","name":"Gabriele Sestito"},"address":{"@type":"PostalAddress","addressLocality":"Morbio Inferiore","addressRegion":"TI","addressCountry":"CH"}},
-    {"@type":"WebSite","@id":"https://reviewdesk-silk.vercel.app/#site","url":"https://reviewdesk-silk.vercel.app/","name":"ReviewDesk","inLanguage":"it-CH","publisher":{"@id":"https://sititicino.ch/#org"}},
+    {"@type":"WebSite","@id":"https://reviewdesk.ai.studio/#site","url":"https://reviewdesk.ai.studio/","name":"ReviewDesk","inLanguage":"it-CH","publisher":{"@id":"https://sititicino.ch/#org"}},
     {"@type":"SoftwareApplication","name":"ReviewDesk","applicationCategory":"BusinessApplication","operatingSystem":"Web","inLanguage":"it-CH","description":"Gestione delle recensioni Google per ristoranti, saloni e studi: bozze di risposta in italiano, tedesco e inglese approvate dal titolare e richieste di recensione con consenso del cliente.","offers":{"@type":"Offer","price":"0","priceCurrency":"CHF","description":"Accesso pilota gratuito"},"publisher":{"@id":"https://sititicino.ch/#org"}},
     {"@type":"FAQPage","mainEntity":[
     {"@type":"Question","name":"ReviewDesk pubblica le risposte da solo?","acceptedAnswer":{"@type":"Answer","text":"No. Ogni risposta è una bozza: viene pubblicata solo dopo la tua approvazione. Puoi modificarla, rigenerarla o scartarla."}},
@@ -58,7 +77,8 @@
     <!-- Top Header -->
     <header class="bg-white border-b border-[#E2E5E0] sticky top-0 z-40">
       <div class="max-w-[1080px] mx-auto px-5 flex items-center justify-between min-h-[60px] gap-4">
-        <a class="font-bold text-[19px] text-[#1C2321] tracking-tight" href="#" aria-label="ReviewDesk, home">
+        <a class="flex items-center gap-2 font-bold text-[19px] text-[#1C2321] tracking-tight" href="#" aria-label="ReviewDesk, home">
+          <img src="/assets/aistudio/Geometric_letter_R_logo_design_1d946495__1__2af70099.jpg" alt="Logo" class="w-8 h-8 rounded-md" />
           ReviewDesk
         </a>
         <nav aria-label="Principale" class="hidden md:block">
@@ -434,7 +454,7 @@
           </a>
           <a 
             id="shareMail"
-            href="#" 
+            href="mailto:info@sititicino.ch?subject=Richiesta%20informazioni%20ReviewDesk&body=Salve,%0A%0Adesidero%20ricevere%20maggiori%20informazioni%20su%20ReviewDesk.%0A%0AGrazie."
             class="border border-[#E2E5E0] bg-white rounded-[6px] py-2 px-3.5 text-[15px] text-[#1C2321] hover:bg-[#E8F0EC] transition flex items-center gap-1.5"
           >
             Email
@@ -486,7 +506,6 @@
       if (shareFb) shareFb.href = `https://www.facebook.com/sharer/sharer.php?u=${currentUrl}`;
 
       const shareMail = document.getElementById('shareMail');
-      if (shareMail) shareMail.href = `mailto:?subject=${shareTitle}&body=${currentUrl}`;
     </script>
   </body>
 </html>

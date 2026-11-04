@@ -63,3 +63,12 @@ if (rootElement) {
     </React.StrictMode>
   );
 }
+
+// Register PWA service worker
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((err) => {
+      console.warn('ServiceWorker registration error:', err);
+    });
+  });
+}

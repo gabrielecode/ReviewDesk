@@ -7,7 +7,8 @@ import {
   RefreshCw,
   AlertCircle,
   CheckCircle2,
-  X
+  X,
+  ShieldAlert
 } from 'lucide-react';
 import { Review, Business } from '../types';
 import { updateReviewInDb } from '../storage';
@@ -28,6 +29,7 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
 }) => {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterStars, setFilterStars] = useState<number | 'all'>('all');
+  const [onlyCritical, setOnlyCritical] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
   const [draftReplyText, setDraftReplyText] = useState<string>('');
@@ -70,14 +72,17 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
           googleUrl: business.googleUrl,
           businessName: business.name,
           location: business.location,
-          apiKey: business.googleApiKey
+          force: true // MODIFICATO: invia force:true
         })
       });
 
       const data = await res.json().catch(() => ({ success: false, message: 'Errore risposta server' }));
 
       if (!res.ok || data.success === false) {
-        setSyncBanner({ type: 'error', msg: data.message || 'Errore durante la sincronizzazione.' });
+        setSyncBanner({ 
+          type: 'error', 
+          msg: data.message || 'Errore durante la sincronizzazione.' 
+        });
         return;
       }
 
@@ -100,7 +105,11 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
 
   const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 768;
 
+  const unansweredCriticalReviews = reviews.filter(r => r.stars <= 2 && r.status !== 'pubblicata');
+  const isDashboardAlertEnabled = (business.notifyNegativeReviews ?? true) && (business.notifyDashboardEnabled ?? true);
+
   const filteredReviews = reviews.filter((r) => {
+    if (onlyCritical && (r.stars > 2 || r.status === 'pubblicata')) return false;
     if (filterStatus !== 'all' && r.status !== filterStatus) return false;
     if (filterStars !== 'all' && r.stars !== filterStars) return false;
     if (searchQuery.trim()) {
@@ -118,7 +127,7 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
     } else if (filteredReviews.length === 0) {
       setSelectedReviewId(null);
     }
-  }, [filteredReviews.length, filterStatus, filterStars, business.id]);
+  }, [filteredReviews.length, filterStatus, filterStars, onlyCritical, business.id]);
 
   const selectedReview = reviews.find(r => r.id === selectedReviewId) || null;
 
@@ -299,6 +308,49 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
         </div>
       )}
 
+      {/* Dashboard Notification Banner per recensioni critiche (1-2 stelle) */}
+      {isDashboardAlertEnabled && unansweredCriticalReviews.length > 0 && (
+        <div className="bg-[#B3382C]/10 border border-[#B3382C]/30 rounded-[8px] p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-[#B3382C]/15 rounded-[6px] text-[#B3382C] shrink-0 mt-0.5">
+              <ShieldAlert className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-[#B3382C] animate-pulse"></span>
+                <h4 className="font-semibold text-xs text-[#1C2321]">
+                  Avviso Dashboard: {unansweredCriticalReviews.length} recension{unansweredCriticalReviews.length === 1 ? 'e critica' : 'i critiche'} (1-2 stelle) in attesa di risposta
+                </h4>
+                <span className="text-[10px] font-semibold bg-[#B3382C] text-white px-2 py-0.5 rounded-full">
+                  Risposta Rapida
+                </span>
+              </div>
+              <p className="text-[11px] text-[#667069] mt-0.5">
+                Obiettivo impostato: risposta entro <strong>{business.notifyResponseTargetHours || 12} ore</strong>. Rispondere subito in modo empatico protegge la reputazione e converte il feedback negativo in fiducia.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
+            <button
+              onClick={() => {
+                setOnlyCritical(prev => !prev);
+                if (unansweredCriticalReviews[0]) {
+                  setSelectedReviewId(unansweredCriticalReviews[0].id);
+                }
+              }}
+              className={`px-3 py-1.5 text-xs font-medium rounded-[6px] transition flex items-center gap-1.5 ${
+                onlyCritical 
+                  ? 'bg-[#B3382C] text-white hover:bg-[#9a2e23]' 
+                  : 'bg-white border border-[#B3382C]/40 text-[#B3382C] hover:bg-[#B3382C]/5'
+              }`}
+            >
+              <ShieldAlert className="w-3.5 h-3.5" />
+              {onlyCritical ? 'Mostra tutte le recensioni' : `Gestisci ${unansweredCriticalReviews.length} critich${unansweredCriticalReviews.length === 1 ? 'a' : 'e'}`}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="input-field text-xs py-1.5 px-3">
@@ -311,6 +363,20 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({
             <option value="all">Tutte le stelle</option>
             {[5,4,3,2,1].map(s => <option key={s} value={s}>{s} Stell{s===1?'a':'e'}</option>)}
           </select>
+          {unansweredCriticalReviews.length > 0 && (
+            <button
+              onClick={() => setOnlyCritical(prev => !prev)}
+              className={`px-2.5 py-1.5 text-xs rounded-[6px] font-medium border flex items-center gap-1.5 transition ${
+                onlyCritical
+                  ? 'bg-[#B3382C] text-white border-[#B3382C]'
+                  : 'bg-[#B3382C]/10 text-[#B3382C] border-[#B3382C]/30 hover:bg-[#B3382C]/20'
+              }`}
+              title="Filtra solo le recensioni da 1 e 2 stelle senza risposta"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-[#B3382C]"></span>
+              Critiche 1-2★ ({unansweredCriticalReviews.length})
+            </button>
+          )}
         </div>
         <div className="relative w-full sm:w-64">
           <Search className="w-3.5 h-3.5 text-[#667069] absolute left-3 top-2.5" />

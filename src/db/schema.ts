@@ -40,10 +40,18 @@ export const businesses = pgTable('businesses', {
   googlePlaceId: text('google_place_id'),
   googleAccountId: text('google_account_id'),
   googleLocationId: text('google_location_id'),
-  googleApiKey: text('google_api_key'),
+  googleApiKey: text('google_api_key'), // deprecata, non più usata // MODIFICATO
   syncFrequency: text('sync_frequency').default('daily'),
   autoSyncReviews: boolean('auto_sync_reviews').default(true),
   lastSyncAt: text('last_sync_at'),
+  tomtomPlaceId: text('tomtom_place_id'),
+  tomtomUrl: text('tomtom_url'),
+  notifyNegativeReviews: boolean('notify_negative_reviews').default(true),
+  notifyEmailEnabled: boolean('notify_email_enabled').default(true),
+  notifyEmailAddress: text('notify_email_address'),
+  notifyDashboardEnabled: boolean('notify_dashboard_enabled').default(true),
+  notifyResponseTargetHours: integer('notify_response_target_hours').default(12),
+  notifyAutoDraft: boolean('notify_auto_draft').default(true),
 });
 
 export const reviews = pgTable('reviews', {

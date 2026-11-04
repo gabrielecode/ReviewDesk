@@ -9,8 +9,8 @@ Copia `.env.example` in `.env` e configura le seguenti variabili:
 - `VITE_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `ADMIN_EMAILS`
-- `GOOGLE_MAPS_API_KEY`
-- `OPENROUTER_API_KEY`
+- `SERPKITE_API_KEY`
+- `TOMTOM_API_KEY`
 
 ## Database & RLS SQL
 
@@ -35,7 +35,7 @@ create table if not exists businesses (
   google_place_id text,
   google_account_id text,
   google_location_id text,
-  google_api_key text,
+  -- google_api_key text, -- MODIFICATO: rimosso
   sync_frequency text,
   auto_sync_reviews boolean default true,
   last_sync_at text
@@ -117,6 +117,12 @@ create policy "Users can access reviews of own businesses"
     )
   );
 
+## Sincronizzazione Recensioni (SerpKite)
+L'applicazione utilizza ora l'API SerpKite:
+- **Sincronizzazione**: Gestita tramite **SerpKite** (/v1/places e /v1/reviews).
+- **Geolocalizzazione**: Gestita tramite **Nominatim (OpenStreetMap)** / **TomTom**.
+- **Configurazione**: È richiesta la chiave `SERPKITE_API_KEY`.
+- **Cache**: La sincronizzazione è limitata a una volta ogni 30 minuti per business (bypassabile con `force: true` da UI).
 -- Politiche RLS per requests (tramite business_id)
 create policy "Users can access requests of own businesses"
   on requests for all

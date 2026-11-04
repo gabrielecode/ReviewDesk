@@ -14,10 +14,18 @@ export interface Business {
   googlePlaceId?: string;
   googleAccountId?: string;
   googleLocationId?: string;
-  googleApiKey?: string;
+  // googleApiKey?: string; // MODIFICATO: rimosso
   syncFrequency?: 'realtime' | 'daily' | 'weekly' | 'manual';
   autoSyncReviews?: boolean;
   lastSyncAt?: string;
+  tomtomPlaceId?: string;
+  tomtomUrl?: string;
+  notifyNegativeReviews?: boolean;
+  notifyEmailEnabled?: boolean;
+  notifyEmailAddress?: string;
+  notifyDashboardEnabled?: boolean;
+  notifyResponseTargetHours?: number;
+  notifyAutoDraft?: boolean;
 }
 
 export interface Review {

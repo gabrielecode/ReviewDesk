@@ -14,6 +14,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { Business } from '../types';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface SidebarProps {
   businesses: Business[];
@@ -27,6 +28,7 @@ interface SidebarProps {
   userEmail?: string;
   onSignOut: () => void;
   onAddBusiness: () => void;
+  criticalReviewsCount?: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -41,6 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   userEmail,
   onSignOut,
   onAddBusiness,
+  criticalReviewsCount,
 }) => {
   const [dropdownOpen, setDropdownOpen] = React.useState(false);
 
@@ -52,7 +55,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const navItems = [
     { id: 'landing', label: 'Sito Pubblico', icon: Globe },
-    { id: 'reviews', label: 'Recensioni', icon: MessageSquare },
+    { 
+      id: 'reviews', 
+      label: 'Recensioni', 
+      icon: MessageSquare, 
+      criticalBadge: criticalReviewsCount && criticalReviewsCount > 0 ? criticalReviewsCount : undefined 
+    },
     { id: 'requests', label: 'Richieste', icon: Send },
     { id: 'stats', label: 'Statistiche', icon: BarChart3 },
     { id: 'settings', label: 'Impostazioni', icon: Settings },
@@ -155,14 +163,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-[6px] text-xs font-medium transition ${
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-[6px] text-xs font-medium transition ${
                   isActive
                     ? 'bg-[#E8F0EC] text-[#1F5F4A]'
                     : 'text-[#667069] hover:bg-[#F6F7F5] hover:text-[#1C2321]'
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-[#1F5F4A]' : 'text-[#667069]'}`} />
-                <span>{item.label}</span>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-[#1F5F4A]' : 'text-[#667069]'}`} />
+                  <span className="truncate">{item.label}</span>
+                </div>
+                {item.criticalBadge ? (
+                  <span 
+                    className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-[#B3382C] text-white animate-pulse shrink-0" 
+                    title={`${item.criticalBadge} recensioni critiche (1-2★) in attesa di risposta`}
+                  >
+                    {item.criticalBadge}
+                  </span>
+                ) : item.badge ? (
+                  <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#1F5F4A]/10 text-[#1F5F4A] shrink-0">
+                    {item.badge}
+                  </span>
+                ) : null}
               </button>
             );
           })}
@@ -175,6 +197,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span className="font-medium text-[#1C2321] block truncate">{userEmail}</span>
             </div>
           )}
+          <PWAInstallButton variant="sidebar" />
           {onClearDemoData && (
             <button
               onClick={onClearDemoData}
@@ -211,6 +234,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ← Home
           </button>
           <div className="flex items-center gap-2">
+            <PWAInstallButton variant="compact" />
             <select
               value={currentBusiness?.id || ''}
               onChange={(e) => {
@@ -245,11 +269,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-[6px] transition ${
+                className={`relative flex flex-col items-center gap-0.5 py-1 px-2 rounded-[6px] transition ${
                   isActive ? 'text-[#1F5F4A] bg-[#E8F0EC]' : 'text-[#667069]'
                 }`}
               >
-                <Icon className="w-4 h-4" />
+                <div className="relative">
+                  <Icon className="w-4 h-4" />
+                  {item.criticalBadge && (
+                    <span className="absolute -top-1 -right-2 px-1 py-0.2 rounded-full text-[9px] font-bold bg-[#B3382C] text-white">
+                      {item.criticalBadge}
+                    </span>
+                  )}
+                </div>
                 <span className="text-[10px] font-medium">{item.label}</span>
               </button>
             );

@@ -14,6 +14,7 @@ import { getAppData, saveBusiness, createBusinessInDb, getReviewsForBusinesses, 
 import { auth } from './lib/firebase';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { AlertCircle, RefreshCw, Sparkles, X } from 'lucide-react';
+import { OfflineIndicator } from './components/OfflineIndicator';
 
 const STORAGE_KEY = 'reviewdesk.currentBusinessId';
 
@@ -181,13 +182,29 @@ export default function App() {
     }
   };
 
+  const handleClearDemoData = async () => {
+    if (!currentBusinessId) return;
+    if (!window.confirm('Vuoi davvero eliminare tutte le recensioni attuali? Questa operazione non può essere annullata.')) return;
+    
+    try {
+      const { clearBusinessReviews } = await import('./storage');
+      await clearBusinessReviews(currentBusinessId);
+      await loadData();
+    } catch (err: any) {
+      alert('Errore durante l\'eliminazione dei dati: ' + err.message);
+    }
+  };
+
   const handleResetDemoData = async () => {
-    // In this version, we don't have local demo data reset, but we could implement it
     loadData();
   };
 
+
   const currentReviews = reviews.filter(r => r.businessId === currentBusiness?.id);
   const currentRequests = requests.filter(r => r.businessId === currentBusiness?.id);
+  const criticalReviewsCount = (currentBusiness?.notifyNegativeReviews ?? true) && (currentBusiness?.notifyDashboardEnabled ?? true)
+    ? currentReviews.filter(r => r.stars <= 2 && r.status !== 'pubblicata').length
+    : 0;
 
   if (activeTab === 'landing') {
     return <LandingPage onOpenDashboard={() => setActiveTab('reviews')} />;
@@ -329,8 +346,9 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onResetData={handleResetDemoData}
-        onClearDemoData={() => loadData()}
+        onClearDemoData={handleClearDemoData}
         onOpenConnectionModal={() => setIsConnectionModalOpen(true)}
+        criticalReviewsCount={criticalReviewsCount}
         userEmail={user.email || ''}
         onSignOut={handleSignOut}
         onAddBusiness={() => setShowAddBusinessModal(true)}
@@ -399,6 +417,7 @@ export default function App() {
         </div>
 
         <Footer />
+        <OfflineIndicator />
       </main>
 
       <ConnectionModal
