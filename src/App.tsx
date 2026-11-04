@@ -5,6 +5,7 @@ import { ReviewsTab } from './components/ReviewsTab';
 import { RequestsTab } from './components/RequestsTab';
 import { StatsTab } from './components/StatsTab';
 import { SettingsTab } from './components/SettingsTab';
+import { TripAdvisorTab } from './components/TripAdvisorTab';
 import { AdminAccessTab } from './components/AdminAccessTab';
 import { Footer } from './components/Footer';
 import { LandingPage } from './components/LandingPage';
@@ -378,6 +379,13 @@ export default function App() {
               reviews={currentReviews}
               onRefreshReviews={handleRefreshReviews}
               onImportReviews={handleImportReviews}
+            />
+          )}
+
+          {activeTab === 'tripadvisor' && currentBusiness && (
+            <TripAdvisorTab
+              key={currentBusiness.id}
+              business={currentBusiness}
             />
           )}
 

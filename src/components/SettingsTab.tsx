@@ -601,6 +601,27 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
         </div>
       </form>
 
+      <div className="panel-card p-5 space-y-4 border border-[#00AF87]/20 bg-[#F0FAF6]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 rounded bg-[#00AF87]/10 text-[#00AF87]">
+                <Database className="w-4 h-4" />
+              </span>
+              <h3 className="font-semibold text-xs text-[#1C2321] uppercase tracking-wide">
+                TripAdvisor Integration (Apify Scraper)
+              </h3>
+              <span className="bg-[#E8F0EC] text-[#00AF87] text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                Attivo
+              </span>
+            </div>
+            <p className="text-[11px] text-[#667069]">
+              Monitoraggio automatizzato delle recensioni TripAdvisor tramite Apify. Configura il tuo URL e gestisci le bozze nella tab TripAdvisor dedicata.
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div className="panel-card p-5 space-y-4 border border-[#1F5F4A]/20 bg-[#F6F8F7]">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="space-y-1">

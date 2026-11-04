@@ -56,7 +56,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenDashboard }) => 
   };
 
   const currentUrl = encodeURIComponent(window.location.href.split('#')[0]);
-  const shareTitle = encodeURIComponent('ReviewDesk: gestione delle recensioni Google per attività ticinesi');
+  const shareTitle = encodeURIComponent('ReviewDesk: gestione delle recensioni per attività ticinesi');
 
   return (
     <div className="min-h-screen bg-[#F6F7F5] text-[#1C2321] font-sans">
@@ -113,11 +113,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenDashboard }) => 
         <section className="py-12 md:py-16">
           <div className="max-w-[1080px] mx-auto px-5 grid grid-cols-1 md:grid-cols-[1.25fr_1fr] gap-8 md:gap-12 items-start">
             <div>
+              <div className="inline-flex items-center gap-2 bg-[#E8F0EC] text-[#1F5F4A] px-3 py-1 rounded-full text-xs font-semibold mb-4">
+                <span>Google &amp; TripAdvisor attivi</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-[#1F5F4A]"></span>
+                <span>Altri canali in preparazione</span>
+              </div>
               <h1 className="text-[30px] md:text-[46px] font-bold leading-[1.2] tracking-tight mb-4 max-w-[17em]">
-                Rispondi alle recensioni Google in pochi secondi, senza perdere il tuo tono
+                Rispondi alle recensioni Google e TripAdvisor in pochi secondi
               </h1>
               <p className="text-[19px] text-[#586159] mb-6 max-w-[36em] leading-[1.6]">
-                ReviewDesk scrive la bozza di risposta in italiano, tedesco o inglese. Tu la leggi, la modifichi e la pubblichi solo se ti convince. Pensato per ristoranti, saloni e studi del Ticino.
+                Collega facilmente il tuo ristorante o salone. ReviewDesk scrive bozze di risposta professionali per Google e TripAdvisor. Ulteriori piattaforme di recensione saranno disponibili presto.
               </p>
               
               <ul className="list-none p-0 m-0 mb-8 space-y-2 text-[#1C2321]">
@@ -127,7 +132,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenDashboard }) => 
                 </li>
                 <li className="pl-7 relative">
                   <span className="absolute left-1 top-[0.45em] w-[10px] h-[6px] border-l-2 border-b-2 border-[#1F5F4A] -rotate-45"></span>
-                  Richieste di recensione a tutti i clienti, nel rispetto delle regole di Google
+                  Richieste di recensione a tutti i clienti, nel rispetto delle regole delle piattaforme
                 </li>
                 <li className="pl-7 relative">
                   <span className="absolute left-1 top-[0.45em] w-[10px] h-[6px] border-l-2 border-b-2 border-[#1F5F4A] -rotate-45"></span>
@@ -297,7 +302,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenDashboard }) => 
               <li className="pt-3.5 border-t-[3px] border-[#1F5F4A]">
                 <span className="font-bold text-[#1F5F4A] block mb-1 text-[16px]">1.</span>
                 <h3 className="text-[19px] font-bold mb-2">Colleghi l’attività</h3>
-                <p className="text-[#586159] text-[15px] leading-relaxed">Ti aiutiamo a configurare il profilo Google, il tono delle risposte e la firma.</p>
+                <p className="text-[#586159] text-[15px] leading-relaxed">Ti aiutiamo a configurare il profilo TripAdvisor, il tono delle risposte e la firma. Altre connessioni in arrivo.</p>
               </li>
               <li className="pt-3.5 border-t-[3px] border-[#1F5F4A]">
                 <span className="font-bold text-[#1F5F4A] block mb-1 text-[16px]">2.</span>
@@ -372,7 +377,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenDashboard }) => 
                 { q: "Come vengono trattati i dati dei clienti?", a: "Il numero di telefono serve solo a inviare la richiesta di recensione, e solo se il cliente ha dato il consenso. Il trattamento segue la legge federale svizzera sulla protezione dei dati." },
                 { q: "Quanto costa?", a: "Il periodo pilota è gratuito. Il prezzo successivo ti verrà comunicato prima di qualsiasi addebito, senza vincoli di durata." },
                 { q: "Mi serve esperienza tecnica?", a: "No. Durante il pilota configuriamo l’attività insieme a te e ti mostriamo come approvare le risposte dal telefono o dal computer." },
-                { q: "Il collegamento con Google Business Profile è già attivo?", a: "Lo stiamo attivando con le attività pilota. Per questo seguiamo ogni attività da vicino nella fase iniziale e ti diciamo chiaramente cosa è già disponibile." }
+                { q: "Il collegamento con TripAdvisor e altre piattaforme è già attivo?", a: "Il collegamento con TripAdvisor è attivo in fase pilota. Stiamo aggiungendo altre piattaforme. Seguiamo ogni attività da vicino nella fase iniziale e ti diciamo chiaramente cosa è già disponibile." }
               ].map((faq, idx) => (
                 <details key={idx} className="py-2 group cursor-pointer">
                   <summary className="font-semibold py-3.5 pr-8 relative text-[#1C2321] list-none select-none">

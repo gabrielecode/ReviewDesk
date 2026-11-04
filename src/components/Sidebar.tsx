@@ -7,6 +7,7 @@ import {
   ChevronDown,
   RotateCcw,
   Globe,
+  Compass,
   Plus,
   LogOut,
   Users,
@@ -57,10 +58,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'landing', label: 'Sito Pubblico', icon: Globe },
     { 
       id: 'reviews', 
-      label: 'Recensioni', 
+      label: 'Recensioni Google', 
       icon: MessageSquare, 
       criticalBadge: criticalReviewsCount && criticalReviewsCount > 0 ? criticalReviewsCount : undefined 
     },
+    { id: 'tripadvisor', label: 'TripAdvisor', icon: Compass },
     { id: 'requests', label: 'Richieste', icon: Send },
     { id: 'stats', label: 'Statistiche', icon: BarChart3 },
     { id: 'settings', label: 'Impostazioni', icon: Settings },

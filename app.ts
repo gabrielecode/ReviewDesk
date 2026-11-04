@@ -10,9 +10,11 @@ import net from 'net';
 import { URL } from 'url';
 import { createHash } from 'crypto';
 import { GoogleGenAI, Type } from "@google/genai";
+import tripadvisorRoutes from './api/tripadvisorRoutes.ts';
 
 const app = express();
 app.use(express.json());
+app.use('/api/tripadvisor', tripadvisorRoutes);
 
 console.log('Database configuration check:');
 console.log('SQL_HOST:', process.env.SQL_HOST ? 'Present' : 'Missing');
